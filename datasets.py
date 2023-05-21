@@ -10,6 +10,8 @@ from enum import Enum
 from shapely.geometry import Point
 import geopandas as gpd
 from geopandas import GeoDataFrame
+import xarray as xr
+import numpy as np
 
 
 # %%
@@ -27,7 +29,7 @@ def convert_latlon(latlon):
     return multiplier * result
 
 
-class StationData:
+class ECADStationData:
     """
     Wraps the station data of the ECA&D Dataset.
     """
@@ -66,7 +68,7 @@ class StationData:
                 continue
             df = self._sanitise_df(df)
             dfs.append(df)
-        return pd.concat(dfs)
+        return pd.concat(dfs, ignore_index=True)
 
     def _load_metadata(self, raw_path):
         meta = pd.read_csv(f"{raw_path}/stations.txt", header=13, encoding="latin-1")
@@ -100,39 +102,89 @@ class StationData:
         df["TEMP"] /= 10
         return df
 
-    # TODO: return cube here?
-    def at_date(self, date):
+    def at_datetime(self, date):
         date = pd.to_datetime(date)
         entries = self.df[self.df["DATE"] == date]
         entries = entries.merge(self.meta_df, on="STAID")
         return entries
 
 
-sd = StationData(
-    "data/raw/ECA_blend_tg",
-    "2018-01-01",
-    "2019-01-01",
-    country_filter="DE",
-    filter_suspect=True,
-)
 # %%
-germany = gpd.read_file("data/shapefiles/DEU_adm0.shp")
-df = sd.at_date(f"2018-06-12")
-geometry = gpd.points_from_xy(df["LON"], df["LAT"])
-gdf = GeoDataFrame(df, geometry=geometry)
-gdf.crs = "epsg:4326"
-germany.crs = "epsg:4326"
-# %%
-# %%
-import xarray as xr
+class DWDSTationData:
+    def __init__(self, raw_path, start_date, end_date) -> None:
+        self.start_date = pd.to_datetime(start_date)
+        self.end_date = pd.to_datetime(end_date)
+        self.df, self.meta_df = self._load_data(raw_path)
 
-ds = xr.open_dataset("data/raw/ERA_5_Germany/1.grib", engine="cfgrib")
+    def _load_data(self, root):
+        dfs = []
+        meta_dfs = []
+        for subdir in tqdm(os.listdir(root)):
+            dir_path = f"{root}/{subdir}"
+            if not os.path.isdir(dir_path):
+                continue
 
-# %%
-fig, ax = plt.subplots(1, 1, figsize=(10, 10))
-ds["t2m"].sel(time=pd.to_datetime("2018-06-12")).plot(ax=ax)
-# this is a simple map that goes with geopandas
-ax = germany.plot(edgecolor="red", ax=ax, alpha=1, facecolor="none")
-gdf.plot(ax=ax, column="TEMP", legend=True)
+            # Data:
+            fname = [n for n in os.listdir(dir_path) if n.startswith("produkt")][0]
+            fpath = f"{root}/{subdir}/{fname}"
+            dfs.append(self._load_station_df(fpath))
 
-# %%
+            # Metadata:
+            fname = [n for n in os.listdir(dir_path) if n.startswith("Metadaten_Geo")][
+                0
+            ]
+            fpath = f"{root}/{subdir}/{fname}"
+            meta_dfs.append(self._load_station_metadata(fpath))
+
+        return pd.concat(dfs, ignore_index=True), pd.concat(meta_dfs, ignore_index=True)
+
+    def _load_station_df(self, fpath):
+        df = pd.read_csv(fpath, delimiter=";", encoding="latin-1")
+        df.columns = ["STATION_ID", "DATETIME", "QN_9", "TEMP", "RF_TU", "eor"]
+        # drop relative humidity, "end of record" column.
+        df = df.drop(["RF_TU", "eor"], axis=1)
+        # Filter date.
+        df["DATETIME"] = pd.to_datetime(df["DATETIME"], format="%Y%m%d%H")
+        df = df[
+            (df["DATETIME"] >= self.start_date) & (df["DATETIME"] <= self.end_date)
+        ].copy()
+
+        # Filter invalid values.
+        df = df[df["TEMP"] != -999.0]
+        return df
+
+    def _load_station_metadata(self, fpath):
+        meta_columns = [
+            "STATION_ID",
+            "HEIGHT",
+            "LAT",
+            "LON",
+            "FROM_DATE",
+            "TO_DATE",
+            "STATION_NAME",
+        ]
+        df = pd.read_csv(fpath, delimiter=";", encoding="latin-1")
+        df.columns = meta_columns
+
+        df["FROM_DATE"] = pd.to_datetime(df["FROM_DATE"], format="%Y%m%d")
+
+        # Last "TO_DATE" is empty because it represents current location.
+        df["TO_DATE"] = pd.to_datetime(df["TO_DATE"], format="%Y%m%d", errors="coerce")
+        df.loc[df.index[-1], "TO_DATE"] = pd.to_datetime("today").normalize()
+
+        df = df[(df["TO_DATE"] >= self.start_date) & (df["FROM_DATE"] <= self.end_date)]
+        return df
+
+    def at_datetime(self, dt):
+        dt = pd.to_datetime(dt)
+        entries = self.df[self.df["DATETIME"] == dt]
+
+        # Select relevant metadata.
+        meta = self.meta_df[
+            (self.meta_df["FROM_DATE"] < dt) & (self.meta_df["TO_DATE"] >= dt)
+        ]
+        entries = entries.merge(meta, on="STATION_ID")
+
+        geometry = gpd.points_from_xy(entries["LON"], entries["LAT"])
+        gdf = GeoDataFrame(entries, geometry=geometry)
+        return gdf
