@@ -1,3 +1,4 @@
+#%%
 from datasets import DWDSTationData, ECADStationData
 import xarray as xr
 
@@ -62,17 +63,29 @@ class CountryPlot:
         self.ax = ax
         
         return fig, ax
-    
+
+def plot_geopandas(gdf, column="TEMP"):
+    fig, ax = plt.subplots(1, 1, figsize=(10, 10))
+    country = gpd.read_file("data/shapefiles/DEU_adm0.shp")
+    country.crs = "epsg:4326"
+    gdf.plot(column=column, ax=ax, legend=True)
+    country.plot(edgecolor="black", ax=ax, alpha=1, facecolor="none")
+    return fig, ax
+
+#%%
 if __name__ == "__main__":
     dwd_sd = DWDSTationData(
         "data/raw/dwd/airtemp2m/unzipped",
         "2000-01-01",
         "today"
         )
-    era5 = xr.open_dataset("data/raw/ERA_5_Germany/1.grib", engine="cfgrib")
-    cp = CountryPlot(
-        shapefile_path="data/shapefiles/DEU_adm0.shp",
-        era5=era5,
-        dwd_data=dwd_sd)
+    #%%
+    #era5 = xr.open_dataset("data/raw/ERA_5_Germany/1.grib", engine="cfgrib")
+    #cp = CountryPlot(
+    #    shapefile_path="data/shapefiles/DEU_adm0.shp",
+    #    era5=era5,
+    #    dwd_data=dwd_sd)
     datetime = "2022-02-22 14:00:00"
-    cp.plot(datetime)
+    gdf = dwd_sd.at_datetime(datetime)
+    plot_geopandas(gdf)
+    #cp.plot(datetime)

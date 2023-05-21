@@ -184,7 +184,29 @@ class DWDSTationData:
             (self.meta_df["FROM_DATE"] < dt) & (self.meta_df["TO_DATE"] >= dt)
         ]
         entries = entries.merge(meta, on="STATION_ID")
+        drop = ["FROM_DATE", "TO_DATE", "QN_9"]
+        entries = entries.drop(drop, axis=1)
 
         geometry = gpd.points_from_xy(entries["LON"], entries["LAT"])
         gdf = GeoDataFrame(entries, geometry=geometry)
+
         return gdf
+    
+    def at_datetimes(self, dts):
+        return pd.concat([self.at_datetime(dt) for dt in tqdm(dts)])
+    
+    def between_datetimes(self, start, end, freq="H"):
+        dts = pd.date_range(start, end, freq=freq)
+        return self.at_datetimes(dts)
+
+
+#%%
+
+if __name__ == "__main__":
+    dwd_sd = DWDSTationData(
+        "data/raw/dwd/airtemp2m/unzipped",
+        "2000-01-01",
+        "today"
+        )
+    #%%
+    dwd_sd.at_datetime("2022-01-01")
