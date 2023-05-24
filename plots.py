@@ -1,4 +1,4 @@
-#%%
+# %%
 from datasets import DWDSTationData, ECADStationData
 import xarray as xr
 
@@ -6,43 +6,43 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import geopandas as gpd
 
+
 class CountryPlot:
-    def __init__(self,
-                 shapefile_path: str = None,
-                 era5: xr.Dataset = None,
-                 dwd_data: DWDSTationData = None,
-                 ecad_data: ECADStationData = None) -> None:
-        
+    def __init__(
+        self,
+        shapefile_path: str = None,
+        era5: xr.Dataset = None,
+        dwd_data: DWDSTationData = None,
+        ecad_data: ECADStationData = None,
+    ) -> None:
         self.vmin = -5
         self.vmax = 30
         self.cm = "coolwarm"
-        
+
         if shapefile_path is not None:
             self.country = gpd.read_file(shapefile_path)
             self.country.crs = "epsg:4326"
-        
+
         if era5 is not None:
             self.era5 = era5
 
         if dwd_data is not None:
             self.dwd = dwd_data
             self.dwd.crs = "epsg:4326"
-        
+
         if ecad_data is not None:
-            #TODO
+            # TODO
             raise NotImplementedError
 
-        
-    
     def show(self):
         self.fig.show()
-    
+
     def plot(self, datetime):
         datetime = pd.to_datetime(datetime)
         fig, ax = plt.subplots(1, 1, figsize=(10, 10))
 
         if self.era5 is not None:
-            era5_t = era5["t2m"].sel(time=datetime) - 273.15
+            era5_t = self.era5["t2m"].sel(time=datetime) - 273.15
             era5_t.plot(ax=ax, vmin=self.vmin, vmax=self.vmax, cmap=self.cm)
 
         if self.dwd is not None:
@@ -58,34 +58,35 @@ class CountryPlot:
 
         if self.country is not None:
             self.country.plot(edgecolor="black", ax=ax, alpha=1, facecolor="none")
-        
+
         self.fig = fig
         self.ax = ax
-        
+
         return fig, ax
 
-def plot_geopandas(gdf, column="TEMP"):
-    fig, ax = plt.subplots(1, 1, figsize=(10, 10))
+
+def plot_geopandas(gdf, column="TEMP", fig_ax=None, legend=True, vmin=None, vmax=None):
+    if fig_ax is not None:
+        fig, ax = fig_ax
+    else:
+        fig, ax = plt.subplots(1, 1, figsize=(10, 10))
     country = gpd.read_file("data/shapefiles/DEU_adm0.shp")
     country.crs = "epsg:4326"
-    gdf.plot(column=column, ax=ax, legend=True)
+    gdf.plot(column=column, ax=ax, legend=legend, vmin=vmin, vmax=vmax)
     country.plot(edgecolor="black", ax=ax, alpha=1, facecolor="none")
     return fig, ax
 
-#%%
+
+# %%
 if __name__ == "__main__":
-    dwd_sd = DWDSTationData(
-        "data/raw/dwd/airtemp2m/unzipped",
-        "2000-01-01",
-        "today"
-        )
-    #%%
-    #era5 = xr.open_dataset("data/raw/ERA_5_Germany/1.grib", engine="cfgrib")
-    #cp = CountryPlot(
+    dwd_sd = DWDSTationData("data/raw/dwd/airtemp2m/unzipped", "2000-01-01", "today")
+    # %%
+    # era5 = xr.open_dataset("data/raw/ERA_5_Germany/1.grib", engine="cfgrib")
+    # cp = CountryPlot(
     #    shapefile_path="data/shapefiles/DEU_adm0.shp",
     #    era5=era5,
     #    dwd_data=dwd_sd)
     datetime = "2022-02-22 14:00:00"
     gdf = dwd_sd.at_datetime(datetime)
     plot_geopandas(gdf)
-    #cp.plot(datetime)
+    # cp.plot(datetime)
