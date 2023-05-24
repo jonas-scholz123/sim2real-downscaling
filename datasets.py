@@ -13,6 +13,9 @@ from geopandas import GeoDataFrame
 import xarray as xr
 import numpy as np
 
+from config import Paths, paths
+from utils import ensure_exists
+
 
 # %%
 class QualityCode(Enum):
@@ -111,14 +114,25 @@ class ECADStationData:
 
 # %%
 class DWDSTationData:
-    def __init__(self, raw_path, start_date, end_date) -> None:
+    def __init__(self, paths: Paths, start_date, end_date) -> None:
         self.start_date = pd.to_datetime(start_date)
         self.end_date = pd.to_datetime(end_date)
-        self.df, self.meta_df = self._load_data(raw_path)
+        self.df, self.meta_df = self._load_data(paths)
 
-    def _load_data(self, root):
+    def _load_data(self, paths: Paths):
+        if os.path.exists(paths.dwd) and os.path.exists(paths.dwd_meta):
+            # If cached, load and return.
+            meta_df = pd.read_feather(paths.dwd_meta)
+            df = pd.read_feather(paths.dwd)
+
+            geometry = gpd.points_from_xy(meta_df["LON"], meta_df["LAT"])
+            meta_df = GeoDataFrame(meta_df, geometry=geometry)
+            meta_df.crs = "epsg:4326"
+            return df, meta_df
+
         dfs = []
         meta_dfs = []
+        root = paths.raw_dwd
         for subdir in tqdm(os.listdir(root)):
             dir_path = f"{root}/{subdir}"
             if not os.path.isdir(dir_path):
@@ -136,7 +150,15 @@ class DWDSTationData:
             fpath = f"{root}/{subdir}/{fname}"
             meta_dfs.append(self._load_station_metadata(fpath))
 
-        return pd.concat(dfs, ignore_index=True), pd.concat(meta_dfs, ignore_index=True)
+        df = pd.concat(dfs, ignore_index=True)
+        meta_df = pd.concat(meta_dfs, ignore_index=True)
+
+        # cache for faster loading in future.
+        ensure_exists(paths.dwd)
+        ensure_exists(paths.dwd_meta)
+        df.to_feather(paths.dwd)
+        meta_df.to_feather(paths.dwd_meta)
+        return df, meta_df
 
     def _load_station_df(self, fpath):
         df = pd.read_csv(fpath, delimiter=";", encoding="latin-1")
@@ -145,9 +167,9 @@ class DWDSTationData:
         df = df.drop(["RF_TU", "eor"], axis=1)
         # Filter date.
         df["DATETIME"] = pd.to_datetime(df["DATETIME"], format="%Y%m%d%H")
-        df = df[
-            (df["DATETIME"] >= self.start_date) & (df["DATETIME"] <= self.end_date)
-        ].copy()
+        # df = df[
+        #    (df["DATETIME"] >= self.start_date) & (df["DATETIME"] <= self.end_date)
+        # ].copy()
 
         # Filter invalid values.
         df = df[df["TEMP"] != -999.0]
@@ -172,7 +194,7 @@ class DWDSTationData:
         df["TO_DATE"] = pd.to_datetime(df["TO_DATE"], format="%Y%m%d", errors="coerce")
         df.loc[df.index[-1], "TO_DATE"] = pd.to_datetime("today").normalize()
 
-        df = df[(df["TO_DATE"] >= self.start_date) & (df["FROM_DATE"] <= self.end_date)]
+        # df = df[(df["TO_DATE"] >= self.start_date) & (df["FROM_DATE"] <= self.end_date)]
         return df
 
     def at_datetime(self, dt):
@@ -183,30 +205,31 @@ class DWDSTationData:
         meta = self.meta_df[
             (self.meta_df["FROM_DATE"] < dt) & (self.meta_df["TO_DATE"] >= dt)
         ]
+
         entries = entries.merge(meta, on="STATION_ID")
         drop = ["FROM_DATE", "TO_DATE", "QN_9"]
         entries = entries.drop(drop, axis=1)
+        entries = entries.reset_index(drop=True)
+        return entries
 
-        geometry = gpd.points_from_xy(entries["LON"], entries["LAT"])
-        gdf = GeoDataFrame(entries, geometry=geometry)
-
-        return gdf
-    
     def at_datetimes(self, dts):
-        return pd.concat([self.at_datetime(dt) for dt in tqdm(dts)])
-    
+        dts = set(dts)
+        df = self.df[self.df["DATETIME"].isin(dts)]
+
+        df = df.merge(self.meta_df, on="STATION_ID")
+
+        # Drop all entries where the meta data info doesn't match the
+        # real data info.
+        df = df[(df["FROM_DATE"] < df["DATETIME"]) & (df["TO_DATE"] >= df["DATETIME"])]
+        df = df.reset_index(drop=True)
+        return df
+
     def between_datetimes(self, start, end, freq="H"):
         dts = pd.date_range(start, end, freq=freq)
         return self.at_datetimes(dts)
 
 
-#%%
-
-if __name__ == "__main__":
-    dwd_sd = DWDSTationData(
-        "data/raw/dwd/airtemp2m/unzipped",
-        "2000-01-01",
-        "today"
-        )
-    #%%
-    dwd_sd.at_datetime("2022-01-01")
+# if __name__ == "__main__":
+dwd_sd = DWDSTationData(paths, "2022-01-01", "2022-01-02")
+# dwd_sd.at_datetime("2022-01-01")
+dwd_sd.between_datetimes("2022-01-01", "2022-01-02")
