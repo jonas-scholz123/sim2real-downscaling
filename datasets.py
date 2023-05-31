@@ -14,10 +14,10 @@ import xarray as xr
 import numpy as np
 
 from config import Paths, paths
+from gridder import Gridder
 from utils import ensure_exists
 
 
-# %%
 class QualityCode(Enum):
     valid = 0
     suspect = 1
@@ -114,9 +114,7 @@ class ECADStationData:
 
 # %%
 class DWDSTationData:
-    def __init__(self, paths: Paths, start_date, end_date) -> None:
-        self.start_date = pd.to_datetime(start_date)
-        self.end_date = pd.to_datetime(end_date)
+    def __init__(self, paths: Paths) -> None:
         self.df, self.meta_df = self._load_data(paths)
 
     def _load_data(self, paths: Paths):
@@ -197,6 +195,11 @@ class DWDSTationData:
         # df = df[(df["TO_DATE"] >= self.start_date) & (df["FROM_DATE"] <= self.end_date)]
         return df
 
+    def _to_gdf(self, df):
+        gdf = gpd.GeoDataFrame(df)
+        gdf.crs = "epsg:4326"
+        return gdf
+
     def at_datetime(self, dt):
         dt = pd.to_datetime(dt)
         entries = self.df[self.df["DATETIME"] == dt]
@@ -210,7 +213,7 @@ class DWDSTationData:
         drop = ["FROM_DATE", "TO_DATE", "QN_9"]
         entries = entries.drop(drop, axis=1)
         entries = entries.reset_index(drop=True)
-        return entries
+        return self._to_gdf(entries)
 
     def at_datetimes(self, dts):
         dts = set(dts)
@@ -222,14 +225,22 @@ class DWDSTationData:
         # real data info.
         df = df[(df["FROM_DATE"] < df["DATETIME"]) & (df["TO_DATE"] >= df["DATETIME"])]
         df = df.reset_index(drop=True)
-        return df
+        return self._to_gdf(df)
 
     def between_datetimes(self, start, end, freq="H"):
         dts = pd.date_range(start, end, freq=freq)
         return self.at_datetimes(dts)
 
+    def apply_grid(self, gridder: Gridder):
+        self.meta_df = gridder.grid_latlons(self.meta_df)
 
-# if __name__ == "__main__":
-dwd_sd = DWDSTationData(paths, "2022-01-01", "2022-01-02")
-# dwd_sd.at_datetime("2022-01-01")
-dwd_sd.between_datetimes("2022-01-01", "2022-01-02")
+
+def load_era5():
+    if paths.era5.endswith("nc"):
+        return xr.load_dataset(paths.era5)
+    else:
+        return xr.load_dataset(paths.era5, engine="cfgrib")
+
+
+if __name__ == "__main__":
+    dwd_sd = DWDSTationData(paths)

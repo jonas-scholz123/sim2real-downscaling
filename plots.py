@@ -19,6 +19,9 @@ class CountryPlot:
         self.vmax = 30
         self.cm = "coolwarm"
 
+        self.dwd = None
+        self.era5 = None
+
         if shapefile_path is not None:
             self.country = gpd.read_file(shapefile_path)
             self.country.crs = "epsg:4326"
@@ -78,15 +81,18 @@ def plot_geopandas(gdf, column="TEMP", fig_ax=None, legend=True, vmin=None, vmax
 
 
 # %%
+
 if __name__ == "__main__":
-    dwd_sd = DWDSTationData("data/raw/dwd/airtemp2m/unzipped", "2000-01-01", "today")
-    # %%
+    from config import paths
+
+    dwd_sd = DWDSTationData(paths)
     # era5 = xr.open_dataset("data/raw/ERA_5_Germany/1.grib", engine="cfgrib")
-    # cp = CountryPlot(
-    #    shapefile_path="data/shapefiles/DEU_adm0.shp",
-    #    era5=era5,
-    #    dwd_data=dwd_sd)
+
+    cp = CountryPlot(
+        shapefile_path="data/shapefiles/DEU_adm0.shp", era5=None, dwd_data=dwd_sd
+    )
     datetime = "2022-02-22 14:00:00"
+    cp.plot(datetime)
+    # %%
     gdf = dwd_sd.at_datetime(datetime)
     plot_geopandas(gdf)
-    # cp.plot(datetime)

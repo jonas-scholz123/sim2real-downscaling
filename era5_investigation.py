@@ -10,26 +10,20 @@ import os
 
 from datasets import DWDSTationData
 from plots import plot_geopandas
+from config import paths
+from gridder import Gridder
 
-import geopandas as gpd
+# %%
+dwd_sd = DWDSTationData(paths)
+era5 = xr.open_dataset(paths.era5, engine="cfgrib")
+era5 = era5["t2m"] - 273.15
+# %%
 
 
 def saveplot(name):
     target_dir = "./outputs/figures/era5_investigation/"
     os.makedirs(target_dir, exist_ok=True)
     plt.savefig(f"{target_dir}/{name}.pdf", bbox_inches="tight")
-
-
-def plot_geopandas(gdf, column="TEMP", fig_ax=None, legend=True, vmin=None, vmax=None):
-    if fig_ax is not None:
-        fig, ax = fig_ax
-    else:
-        fig, ax = plt.subplots(1, 1, figsize=(10, 10))
-    country = gpd.read_file("data/shapefiles/DEU_adm0.shp")
-    country.crs = "epsg:4326"
-    gdf.plot(column=column, ax=ax, legend=legend, vmin=vmin, vmax=vmax)
-    country.plot(edgecolor="black", ax=ax, alpha=1, facecolor="none")
-    return fig, ax
 
 
 def index(a, x):
@@ -40,55 +34,13 @@ def index(a, x):
     raise ValueError
 
 
-class Gridder:
-    def __init__(self, lats, lons):
-        self.lat_grid = pd.unique(lats - lats.astype(int))
-
-        self.lon_grid = pd.unique(lons - lons.astype(int))
-
-    def closest(self, grid, val):
-        int_val = int(val)
-        remainder = val - int_val
-        return round(int_val + min(grid, key=lambda x: abs(x - remainder)), 3)
-
-    def closest_lat(self, lat):
-        return self.closest(self.lat_grid, lat)
-
-    def closest_lon(self, lon):
-        return self.closest(self.lon_grid, lon)
-
-    def closest_latlon(self, lat, lon):
-        return self.closest_lat(lat), self.closest_lon(lon)
-
-    def grid_latlons(self, df):
-        df[["GRID_LAT", "GRID_LON"]] = df.apply(
-            lambda row: self.closest_latlon(row.LAT, row.LON),
-            result_type="expand",
-            axis=1,
-        )
-
-        grid_geom = gpd.points_from_xy(df["GRID_LON"], df["GRID_LAT"], crs="epsg:4326")
-        grid_geom = gpd.GeoSeries(grid_geom)
-
-        grid_geom = grid_geom.to_crs(crs=3310)
-        df2 = df.to_crs(crs=3310)
-        df["GRID_DIST"] = grid_geom.distance(df2["geometry"])
-        return df
-
-
-# %%
-dwd_sd = DWDSTationData("data/raw/dwd/airtemp2m/unzipped", "2000-01-01", "today")
-era5 = xr.open_dataset("data/raw/ERA_5_Germany/1.grib", engine="cfgrib")
-era5 = era5["t2m"] - 273.15
-
-
-# %%
 class Comparer:
-    def __init__(self, dwd_sd, era5, start, end, freq="1H") -> None:
+    def __init__(
+        self, dwd_sd: DWDSTationData, era5: xr.Dataset, start, end, freq="1H"
+    ) -> None:
         gridder = Gridder(era5["latitude"].values, era5["longitude"].values)
-        dwd_df = dwd_sd.between_datetimes(start, end, "7H")
-        dwd_df = gridder.grid_latlons(dwd_df)
-
+        dwd_sd.apply_grid(gridder)
+        dwd_df = dwd_sd.between_datetimes(start, end, freq)
         era5_df = era5[(era5["time"] > start) & (era5["time"] < end)].to_dataframe()
 
         df = dwd_df.merge(
@@ -128,7 +80,12 @@ class Comparer:
         self.agg_map(agg, remove_outliers)
 
     def agg_df(self, agg: Callable, remove_outliers: bool = False):
-        agg_df = self.df.groupby(["STATION_ID", "geometry"], as_index=False).agg(agg)
+        agg_df = self.df.groupby("STATION_ID").agg(
+            {
+                "geometry": "first",
+                "TEMP_DIFF": agg,
+            }
+        )
         agg_df = agg_df.set_geometry("geometry")
         if remove_outliers:
             agg_df = self.remove_outliers(agg_df)
@@ -152,12 +109,24 @@ class Comparer:
         plt.xlabel("Station Distance to Grid [m]")
         plt.ylabel("$\sqrt{MSE(T)}$ [°C]")
 
-    def rmse_hist(self, remove_outliers: bool = False, ax=None):
+    def agg_rmse_hist(self, remove_outliers: bool = False, ax=None):
         if ax is None:
             _, ax = plt.subplots(1, 1, figsize=(6, 4))
         rmse = lambda x: np.sqrt(np.mean(x**2))
         agg_df = self.agg_df(rmse, remove_outliers)
         ax.hist(agg_df["TEMP_DIFF"], bins=30)
+        ax.set_xlabel("$\Delta T$ [°C]")
+        ax.set_ylabel("Count")
+
+    def err_hist(self, remove_outliers: bool = False, ax=None):
+        if ax is None:
+            _, ax = plt.subplots(1, 1, figsize=(6, 4))
+
+        df = self.df
+        if remove_outliers:
+            df = self.remove_outliers(self.df)
+
+        ax.hist(df["TEMP_DIFF"], bins=30)
         ax.set_xlabel("$\sqrt{MSE(T)}$ [°C]")
         ax.set_ylabel("Count")
 
@@ -189,10 +158,21 @@ for ax, month in zip(axs.flatten(), range(1, 13)):
     start = pd.to_datetime(datetime(year=2022, month=month, day=1))
     end = pd.to_datetime(start + timedelta(30))
     c = Comparer(dwd_sd, era5, start, end, "18H")
-    c.rmse_hist(remove_outliers=False, ax=ax)
+    c.err_hist(remove_outliers=False, ax=ax)
     ax.set_title(f"Month = {month}")
 plt.tight_layout()
 saveplot("rmse_hist_by_month")
+plt.show()
+# %%
+fig, axs = plt.subplots(4, 3, figsize=(10, 15))
+for ax, month in zip(axs.flatten(), range(1, 13)):
+    start = pd.to_datetime(datetime(year=2022, month=month, day=1))
+    end = pd.to_datetime(start + timedelta(30))
+    c = Comparer(dwd_sd, era5, start, end, "18H")
+    c.agg_rmse_hist(remove_outliers=False, ax=ax)
+    ax.set_title(f"Month = {month}")
+plt.tight_layout()
+saveplot("agg_rmse_hist_by_month")
 plt.show()
 # %%
 fig, axs = plt.subplots(4, 3, figsize=(10, 15))
@@ -255,4 +235,10 @@ df[df["TEMP_DIFF"] == df["TEMP_DIFF"].min()]
 era5.where((era5["time"] > start) & (era5["time"] < end))
 # %%
 # %%
-dwd_df
+dwd_sd = DWDSTationData(paths)
+df = dwd_sd.between_datetimes("2022-01-01", "2022-01-05")
+# %%
+
+gridder = Gridder(era5["latitude"].values, era5["longitude"].values)
+
+gridder.grid_latlons(df)

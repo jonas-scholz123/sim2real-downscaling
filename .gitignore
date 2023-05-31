@@ -2,6 +2,9 @@ data/
 .vscode
 outputs/
 *.DS_Store
+deepsensor/
+
+suggestions.txt
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
