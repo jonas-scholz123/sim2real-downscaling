@@ -13,9 +13,11 @@ from geopandas import GeoDataFrame
 import xarray as xr
 import numpy as np
 
-from config import Paths, paths
+from config import Paths, paths, names, data
 from gridder import Gridder
 from utils import ensure_exists
+
+# %%
 
 
 class QualityCode(Enum):
@@ -112,120 +114,60 @@ class ECADStationData:
         return entries
 
 
-# %%
 class DWDSTationData:
     def __init__(self, paths: Paths) -> None:
         self.df, self.meta_df = self._load_data(paths)
 
     def _load_data(self, paths: Paths):
-        if os.path.exists(paths.dwd) and os.path.exists(paths.dwd_meta):
+        try:
             # If cached, load and return.
-            meta_df = pd.read_feather(paths.dwd_meta)
+            meta_df = gpd.read_feather(paths.dwd_meta)
             df = pd.read_feather(paths.dwd)
+            df = df.set_index([names.time, names.station_id])
 
-            geometry = gpd.points_from_xy(meta_df["LON"], meta_df["LAT"])
-            meta_df = GeoDataFrame(meta_df, geometry=geometry)
-            meta_df.crs = "epsg:4326"
+            assert meta_df.crs == data.crs
+
             return df, meta_df
-
-        dfs = []
-        meta_dfs = []
-        root = paths.raw_dwd
-        for subdir in tqdm(os.listdir(root)):
-            dir_path = f"{root}/{subdir}"
-            if not os.path.isdir(dir_path):
-                continue
-
-            # Data:
-            fname = [n for n in os.listdir(dir_path) if n.startswith("produkt")][0]
-            fpath = f"{root}/{subdir}/{fname}"
-            dfs.append(self._load_station_df(fpath))
-
-            # Metadata:
-            fname = [n for n in os.listdir(dir_path) if n.startswith("Metadaten_Geo")][
-                0
-            ]
-            fpath = f"{root}/{subdir}/{fname}"
-            meta_dfs.append(self._load_station_metadata(fpath))
-
-        df = pd.concat(dfs, ignore_index=True)
-        meta_df = pd.concat(meta_dfs, ignore_index=True)
-
-        # cache for faster loading in future.
-        ensure_exists(paths.dwd)
-        ensure_exists(paths.dwd_meta)
-        df.to_feather(paths.dwd)
-        meta_df.to_feather(paths.dwd_meta)
-        return df, meta_df
-
-    def _load_station_df(self, fpath):
-        df = pd.read_csv(fpath, delimiter=";", encoding="latin-1")
-        df.columns = ["STATION_ID", "DATETIME", "QN_9", "TEMP", "RF_TU", "eor"]
-        # drop relative humidity, "end of record" column.
-        df = df.drop(["RF_TU", "eor"], axis=1)
-        # Filter date.
-        df["DATETIME"] = pd.to_datetime(df["DATETIME"], format="%Y%m%d%H")
-        # df = df[
-        #    (df["DATETIME"] >= self.start_date) & (df["DATETIME"] <= self.end_date)
-        # ].copy()
-
-        # Filter invalid values.
-        df = df[df["TEMP"] != -999.0]
-        return df
-
-    def _load_station_metadata(self, fpath):
-        meta_columns = [
-            "STATION_ID",
-            "HEIGHT",
-            "LAT",
-            "LON",
-            "FROM_DATE",
-            "TO_DATE",
-            "STATION_NAME",
-        ]
-        df = pd.read_csv(fpath, delimiter=";", encoding="latin-1")
-        df.columns = meta_columns
-
-        df["FROM_DATE"] = pd.to_datetime(df["FROM_DATE"], format="%Y%m%d")
-
-        # Last "TO_DATE" is empty because it represents current location.
-        df["TO_DATE"] = pd.to_datetime(df["TO_DATE"], format="%Y%m%d", errors="coerce")
-        df.loc[df.index[-1], "TO_DATE"] = pd.to_datetime("today").normalize()
-
-        # df = df[(df["TO_DATE"] >= self.start_date) & (df["FROM_DATE"] <= self.end_date)]
-        return df
+        except FileNotFoundError:
+            raise FileNotFoundError(
+                f"""DWD Station data is not found at {paths.dwd}
+                or {paths.dwd_meta}. Make sure to run preprocessing/dwd.py first."""
+            )
 
     def _to_gdf(self, df):
         gdf = gpd.GeoDataFrame(df)
-        gdf.crs = "epsg:4326"
+        gdf.crs = data.crs
         return gdf
 
     def at_datetime(self, dt):
         dt = pd.to_datetime(dt)
-        entries = self.df[self.df["DATETIME"] == dt]
+        df = self.df.query(f"{names.time} == @dt")
 
         # Select relevant metadata.
-        meta = self.meta_df[
-            (self.meta_df["FROM_DATE"] < dt) & (self.meta_df["TO_DATE"] >= dt)
-        ]
+        meta = self.meta_df.query("FROM_DATE < @dt & TO_DATE >= @dt")
 
-        entries = entries.merge(meta, on="STATION_ID")
-        drop = ["FROM_DATE", "TO_DATE", "QN_9"]
-        entries = entries.drop(drop, axis=1)
-        entries = entries.reset_index(drop=True)
-        return self._to_gdf(entries)
+        # df = df.merge(meta, on=names.station_id)
+        df = meta.merge(df, on=names.station_id)
+        df = df.drop(["FROM_DATE", "TO_DATE"], axis=1)
+        df = df.reset_index(drop=True)
+        # df = self._to_gdf(df)
+        df[names.time] = dt
+        df = df.set_index([names.time, names.station_id])
+        return df
 
     def at_datetimes(self, dts):
         dts = set(dts)
-        df = self.df[self.df["DATETIME"].isin(dts)]
-
-        df = df.merge(self.meta_df, on="STATION_ID")
+        df = self.df.query(f"{names.time} in @dts")
+        df = df.reset_index()
+        df = self.meta_df.merge(df, on=names.station_id)
+        df = df.set_index([names.time, names.station_id])
+        df = df.query(f"FROM_DATE < {names.time} & TO_DATE >= {names.time}")
 
         # Drop all entries where the meta data info doesn't match the
         # real data info.
-        df = df[(df["FROM_DATE"] < df["DATETIME"]) & (df["TO_DATE"] >= df["DATETIME"])]
-        df = df.reset_index(drop=True)
-        return self._to_gdf(df)
+        # df = self._to_gdf(df)
+        df = df.drop(["FROM_DATE", "TO_DATE"], axis=1)
+        return df
 
     def between_datetimes(self, start, end, freq="H"):
         dts = pd.date_range(start, end, freq=freq)

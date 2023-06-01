@@ -10,13 +10,12 @@ import os
 
 from datasets import DWDSTationData
 from plots import plot_geopandas
-from config import paths
+from config import paths, names
 from gridder import Gridder
 
 # %%
 dwd_sd = DWDSTationData(paths)
-era5 = xr.open_dataset(paths.era5, engine="cfgrib")
-era5 = era5["t2m"] - 273.15
+era5 = xr.open_dataset(paths.era5)
 # %%
 
 
@@ -38,21 +37,29 @@ class Comparer:
     def __init__(
         self, dwd_sd: DWDSTationData, era5: xr.Dataset, start, end, freq="1H"
     ) -> None:
-        gridder = Gridder(era5["latitude"].values, era5["longitude"].values)
+        gridder = Gridder(era5[names.lat].values, era5[names.lon].values)
         dwd_sd.apply_grid(gridder)
         dwd_df = dwd_sd.between_datetimes(start, end, freq)
-        era5_df = era5[(era5["time"] > start) & (era5["time"] < end)].to_dataframe()
 
-        df = dwd_df.merge(
-            era5_df,
-            left_on=["GRID_LAT", "GRID_LON", "DATETIME"],
-            right_on=["latitude", "longitude", "time"],
+        era5_df = era5.where(
+            (era5[names.time] > start) & (era5[names.time] < end), drop=True
+        ).to_dataframe()
+
+        df = (
+            dwd_df.reset_index()
+            .merge(
+                era5_df,
+                left_on=["GRID_LAT", "GRID_LON", names.time],
+                right_on=[names.lat, names.lon, names.time],
+                suffixes=("_REAL", "_ERA5"),
+            )
+            .set_index([names.time, names.station_id])
         )
 
         df = df.drop(
             [
-                "LAT",
-                "LON",
+                names.lat,
+                names.lon,
                 "number",
                 "step",
                 "surface",
@@ -60,15 +67,12 @@ class Comparer:
             ],
             axis=1,
         )
-
-        df = df.rename({"TEMP": "TEMP_REAL", "t2m": "TEMP_ERA5"}, axis=1)
-        df["TEMP_DIFF"] = df["TEMP_ERA5"] - df["TEMP_REAL"]
+        df["TEMP_DIFF"] = df[f"{names.temp}_ERA5"] - df[f"{names.temp}_REAL"]
         self.df = df
 
     def remove_outliers(self, df):
-        # This station (UFS TW Ems) is often very far off.
-        df = df[df["STATION_ID"] != 1228]
-        df = df[df["HEIGHT"] < 800]
+        # Station 1228 (UFS TW Ems) is often very far off.
+        df = df.query(f"{names.station_id} != 1228 & {names.height} < 800")
         return df
 
     def rmse_map(self, remove_outliers: bool = False, **kwargs):
@@ -80,9 +84,11 @@ class Comparer:
         self.agg_map(agg, remove_outliers)
 
     def agg_df(self, agg: Callable, remove_outliers: bool = False):
-        agg_df = self.df.groupby("STATION_ID").agg(
+        agg_df = self.df.groupby(names.station_id).agg(
             {
                 "geometry": "first",
+                names.height: "first",
+                "GRID_DIST": "first",
                 "TEMP_DIFF": agg,
             }
         )
@@ -98,7 +104,7 @@ class Comparer:
     def rmse_height(self, remove_outliers: bool = False):
         rmse = lambda x: np.sqrt(np.mean(x**2))
         agg_df = self.agg_df(rmse, remove_outliers)
-        plt.scatter(agg_df["HEIGHT"], agg_df["TEMP_DIFF"])
+        plt.scatter(agg_df[names.height], agg_df["TEMP_DIFF"])
         plt.xlabel("Height [m]")
         plt.ylabel("$\sqrt{MSE(T)}$ [°C]")
 
@@ -187,9 +193,6 @@ saveplot("rmse_boxplot_by_month_no_outliers")
 plt.show()
 
 # %%
-
-# TODO: By distance to grid point.
-
 start = pd.to_datetime("2022-03-03 12:00:00")
 end = pd.to_datetime("2022-04-03 12:00:00")
 c = Comparer(dwd_sd, era5, start, end, "5H")
@@ -199,46 +202,3 @@ plt.show()
 c.rmse_grid_dist()
 saveplot("rmse_vs_grid_dist")
 plt.show()
-
-# %%
-plt.hist(rmse_df["TEMP_DIFF"], bins=30)
-plt.xlabel("$\sqrt{MSE(T)}$ [°C]")
-# plt.scatter(grouped["HEIGHT"], grouped["TEMP_DIFF"])
-
-# grouped[grouped["TEMP_DIFF"] == grouped["TEMP_DIFF"].min()]
-plot_geopandas(rmse_df, "TEMP_DIFF")
-
-# %%
-no_df = rmse_df[rmse_df["TEMP_DIFF"] < 5]
-plot_geopandas(no_df, "TEMP_DIFF")
-# %%
-plt.scatter(rmse_df["HEIGHT"], rmse_df["TEMP_DIFF"])
-plt.xlabel("Height [m]")
-plt.ylabel("$\sqrt{MSE(T)}$ [°C]")
-# %%
-high_err = rmse_df.sort_values("TEMP_DIFF", ascending=False).iloc[:10, :]
-plot_geopandas(high_err[high_err["HEIGHT"] < 500], "TEMP_DIFF")
-sid = int(high_err[high_err["HEIGHT"] == 0]["STATION_ID"])
-# %%
-df[df["STATION_ID"] == sid]
-# %%
-td = df["TEMP_DIFF"]
-plt.boxplot(td)
-plt.ylabel("$T_{ERA5} - T_{real}$")
-# %%
-fig, ax = plot_geopandas(df, "TEMP_DIFF")
-ax.set_title("$T_{ERA5} - T_{real}$")
-# %%
-df[df["TEMP_DIFF"] == df["TEMP_DIFF"].min()]
-
-# %%
-era5.where((era5["time"] > start) & (era5["time"] < end))
-# %%
-# %%
-dwd_sd = DWDSTationData(paths)
-df = dwd_sd.between_datetimes("2022-01-01", "2022-01-05")
-# %%
-
-gridder = Gridder(era5["latitude"].values, era5["longitude"].values)
-
-gridder.grid_latlons(df)

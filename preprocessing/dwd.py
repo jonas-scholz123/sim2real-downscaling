@@ -1,8 +1,14 @@
 # %%
 import urllib.request
 import os
+import pandas as pd
 from tqdm import tqdm
 from zipfile import ZipFile, BadZipFile
+import geopandas as gpd
+
+from config import data, paths, names
+from utils import ensure_exists
+
 
 fnames = [
     "BESCHREIBUNG_obsgermany_climate_hourly_tu_recent_de.pdf",
@@ -518,38 +524,111 @@ fnames = [
 from_url = "https://opendata.dwd.de/climate_environment/CDC/observations_germany/climate/hourly/air_temperature/recent"
 
 zipped_dir = "./data/raw/dwd/airtemp2m/zipped"
-unzipped_dir = "./data/raw/dwd/airtemp2m/unzipped"
+unzipped_dir = paths.raw_dwd
 
-os.makedirs(zipped_dir, exist_ok=True)
-os.makedirs(unzipped_dir, exist_ok=True)
 
-print("Downloading DWD data")
-for fname in tqdm(fnames):
-    url = f"{from_url}/{fname}"
+def download_dwd():
+    os.makedirs(zipped_dir, exist_ok=True)
+    os.makedirs(unzipped_dir, exist_ok=True)
 
-    if fname.endswith("zip"):
-        out_fpath = f"{zipped_dir}/{fname}"
-    else:
-        out_fpath = f"{unzipped_dir}/{fname}"
-    if os.path.exists(out_fpath):
-        continue
-    urllib.request.urlretrieve(url, out_fpath)
+    print("Downloading DWD data")
+    for fname in tqdm(fnames):
+        url = f"{from_url}/{fname}"
 
-print("Unzipping DWD data")
-for fname in tqdm(fnames):
-    if not fname.endswith("zip"):
-        continue
+        if fname.endswith("zip"):
+            out_fpath = f"{zipped_dir}/{fname}"
+        else:
+            out_fpath = f"{unzipped_dir}/{fname}"
+        if os.path.exists(out_fpath):
+            continue
+        urllib.request.urlretrieve(url, out_fpath)
 
-    zip_fpath = f"{zipped_dir}/{fname}"
+    print("Unzipping DWD data")
+    for fname in tqdm(fnames):
+        if not fname.endswith("zip"):
+            continue
 
-    fname_no_ext = fname.split(".")[0]
-    out_dir = f"{unzipped_dir}/{fname_no_ext}"
-    os.makedirs(out_dir, exist_ok=True)
+        zip_fpath = f"{zipped_dir}/{fname}"
 
-    try:
-        with ZipFile(zip_fpath, "r") as f:
-            f.extractall(out_dir)
-    except BadZipFile:
-        print(
-            f"WARNING: {fname} is corrupted. Please delete it and restart the process."
-        )
+        fname_no_ext = fname.split(".")[0]
+        out_dir = f"{unzipped_dir}/{fname_no_ext}"
+        os.makedirs(out_dir, exist_ok=True)
+
+        try:
+            with ZipFile(zip_fpath, "r") as f:
+                f.extractall(out_dir)
+        except BadZipFile:
+            print(
+                f"WARNING: {fname} is corrupted. Please delete it and restart the process."
+            )
+
+
+def load_station_df(fpath):
+    df = pd.read_csv(fpath, delimiter=";", encoding="latin-1")
+    df.columns = [names.station_id, names.time, "QN_9", names.temp, "RF_TU", "eor"]
+    # drop relative humidity, "end of record" column.
+    df = df.drop(["RF_TU", "eor", "QN_9"], axis=1)
+    # Filter date.
+    df[names.time] = pd.to_datetime(df[names.time], format="%Y%m%d%H")
+
+    # Filter invalid values.
+    df = df[df[names.temp] != -999.0]
+    return df
+
+
+def load_station_metadata(fpath):
+    meta_columns = [
+        names.station_id,
+        names.height,
+        names.lat,
+        names.lon,
+        "FROM_DATE",
+        "TO_DATE",
+        names.station_name,
+    ]
+    df = pd.read_csv(fpath, delimiter=";", encoding="latin-1")
+    df.columns = meta_columns
+
+    df["FROM_DATE"] = pd.to_datetime(df["FROM_DATE"], format="%Y%m%d")
+
+    # Last "TO_DATE" is empty because it represents current location.
+    df["TO_DATE"] = pd.to_datetime(df["TO_DATE"], format="%Y%m%d", errors="coerce")
+    df.loc[df.index[-1], "TO_DATE"] = pd.to_datetime("today").normalize()
+    return df
+
+
+def process_dwd():
+    dfs = []
+    meta_dfs = []
+    root = paths.raw_dwd
+    for subdir in tqdm(os.listdir(root)):
+        dir_path = f"{root}/{subdir}"
+        if not os.path.isdir(dir_path):
+            continue
+
+        # Data:
+        fname = [n for n in os.listdir(dir_path) if n.startswith("produkt")][0]
+        fpath = f"{root}/{subdir}/{fname}"
+        dfs.append(load_station_df(fpath))
+
+        # Metadata:
+        fname = [n for n in os.listdir(dir_path) if n.startswith("Metadaten_Geo")][0]
+        fpath = f"{root}/{subdir}/{fname}"
+        meta_dfs.append(load_station_metadata(fpath))
+
+    df = pd.concat(dfs, ignore_index=True)
+    meta_df = pd.concat(meta_dfs, ignore_index=True)
+    geometry = gpd.points_from_xy(meta_df[names.lon], meta_df[names.lat])
+    meta_df = gpd.GeoDataFrame(meta_df, geometry=geometry)
+    meta_df.crs = data.crs
+
+    # cache for faster loading in future.
+    ensure_exists(paths.dwd)
+    ensure_exists(paths.dwd_meta)
+    df.to_feather(paths.dwd)
+    meta_df.to_feather(paths.dwd_meta)
+
+
+if __name__ == "__main__":
+    download_dwd()
+    process_dwd()
