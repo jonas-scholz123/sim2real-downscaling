@@ -1,5 +1,6 @@
 import pandas as pd
 import geopandas as gpd
+from config import names, data
 
 
 class Gridder:
@@ -15,9 +16,9 @@ class Gridder:
         return a
 
     def grid_latlons(self, df):
-        df["GRID_LAT"] = self.closest_df(self.lat_grid, df["LAT"])
-        df["GRID_LON"] = self.closest_df(self.lon_grid, df["LON"])
-        grid_geom = gpd.points_from_xy(df["GRID_LON"], df["GRID_LAT"], crs="epsg:4326")
+        df["GRID_LAT"] = self.closest_df(self.lat_grid, df[names.lat])
+        df["GRID_LON"] = self.closest_df(self.lon_grid, df[names.lon])
+        grid_geom = gpd.points_from_xy(df["GRID_LON"], df["GRID_LAT"], crs=data.crs)
         grid_geom = gpd.GeoSeries(grid_geom)
 
         grid_geom = grid_geom.to_crs(crs=3310)
