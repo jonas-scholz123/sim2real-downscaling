@@ -620,7 +620,7 @@ def process_dwd():
     meta_df = pd.concat(meta_dfs, ignore_index=True)
     geometry = gpd.points_from_xy(meta_df[names.lon], meta_df[names.lat])
     meta_df = gpd.GeoDataFrame(meta_df, geometry=geometry)
-    meta_df.crs = data.crs
+    meta_df.crs = data.crs_str
 
     # cache for faster loading in future.
     ensure_exists(paths.dwd)

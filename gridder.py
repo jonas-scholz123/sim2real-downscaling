@@ -18,7 +18,7 @@ class Gridder:
     def grid_latlons(self, df):
         df["GRID_LAT"] = self.closest_df(self.lat_grid, df[names.lat])
         df["GRID_LON"] = self.closest_df(self.lon_grid, df[names.lon])
-        grid_geom = gpd.points_from_xy(df["GRID_LON"], df["GRID_LAT"], crs=data.crs)
+        grid_geom = gpd.points_from_xy(df["GRID_LON"], df["GRID_LAT"], crs=data.crs_str)
         grid_geom = gpd.GeoSeries(grid_geom)
 
         grid_geom = grid_geom.to_crs(crs=3310)

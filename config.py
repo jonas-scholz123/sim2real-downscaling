@@ -13,14 +13,15 @@ class Paths:
 
 @dataclass
 class Bounds:
-    low: Tuple[float, float]
-    high: Tuple[float, float]
+    lat: Tuple[float, float]
+    lon: Tuple[float, float]
 
 
 @dataclass
 class DataSpec:
     bounds: Bounds
-    crs: str
+    crs_str: str
+    epsg: int
 
 
 @dataclass
@@ -57,9 +58,7 @@ paths = Paths(
 )
 
 data = DataSpec(
-    bounds=Bounds(
-        low=(47.2, 5.8),
-        high=(54.95, 15.05),
-    ),
-    crs="epsg:4326",
+    bounds=Bounds(lat=(47.2, 54.95), lon=(5.8, 15.05)),
+    crs_str="epsg:4326",
+    epsg=4326,
 )

@@ -125,7 +125,7 @@ class DWDSTationData:
             df = pd.read_feather(paths.dwd)
             df = df.set_index([names.time, names.station_id])
 
-            assert meta_df.crs == data.crs
+            assert meta_df.crs == data.crs_str
 
             return df, meta_df
         except FileNotFoundError:
@@ -136,7 +136,7 @@ class DWDSTationData:
 
     def _to_gdf(self, df):
         gdf = gpd.GeoDataFrame(df)
-        gdf.crs = data.crs
+        gdf.crs = data.crs_str
         return gdf
 
     def at_datetime(self, dt):
