@@ -20,7 +20,7 @@ def process_srtm():
             "y": names.lat,
         }
     )
-    print(elevation)
+    elevation = elevation.sel(band=1).drop("band")
     ensure_exists(paths.srtm)
     elevation.to_netcdf(paths.srtm)
 
