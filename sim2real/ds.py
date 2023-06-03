@@ -2,6 +2,12 @@
 import xarray as xr
 import pandas as pd
 import matplotlib.pyplot as plt
+import torch.optim as optim
+import torch
+import lab as B
+from tqdm import tqdm
+import numpy as np
+from deepsensor.data.utils import concat_tasks
 
 import deepsensor.torch as elevation
 from deepsensor.data.processor import DataProcessor
@@ -9,11 +15,20 @@ from deepsensor.data.loader import TaskLoader
 from deepsensor.model.models import ConvNP
 from deepsensor.plot.utils import plot_context_encoding, plot_offgrid_context
 
-from config import paths, names, data
-from utils import ensure_exists
-from datasets import load_era5
+from sim2real.config import paths, names, data, out, Paths
+from sim2real.utils import ensure_exists
+from sim2real.datasets import load_era5
 import cartopy.crs as ccrs
 import cartopy.feature as feature
+
+
+class SimTrainer:
+    def __init__(self, paths: Paths) -> None:
+        self.paths = paths
+        pass
+
+    def add_era5(self):
+        era5 = load_era5()
 
 
 # %%
@@ -59,9 +74,7 @@ model = ConvNP(data_processor, task_loader, verbose=True)
 
 
 # %%
-def sample_plot(date):
-    date = pd.to_datetime(date)
-    task = task_loader(date, [0.1, "all"], [0.1])
+def sample_plot(task):
     fig = plot_context_encoding(model, task, task_loader)
     plt.show()
 
@@ -92,13 +105,17 @@ def context_target_plot(task):
     plt.show()
 
 
+date = pd.to_datetime("2022-01-01")
+task = task_loader(date, [0.1, "all"], [0.1])
+sample_plot(task)
+context_target_plot(task)
 # %%
-import torch.optim as optim
-import torch
-import lab as B
-from tqdm import tqdm
-import numpy as np
-from deepsensor.data.utils import concat_tasks
+
+import wandb
+
+if out.wandb:
+    wandb.init(project="climate-sim2real")
+
 
 opt = optim.Adam(model.model.parameters(), lr=5e-4)
 
@@ -140,6 +157,8 @@ for epoch in tqdm(range(n_epochs), position=0):
         task["Y_c"][1].mask = task["Y_c"][1].mask[:, 0:1, :]
         batch_loss = train_step(task)
         batch_losses.append(batch_loss)
+
+        wandb.log({"epoch": epoch, "train_loss": batch_loss})
 
     epoch_loss = np.mean(batch_losses)
     epoch_losses.append(epoch_loss)

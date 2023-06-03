@@ -1,6 +1,6 @@
 # %%
-from datasets import load_era5
-from config import paths, names
+from sim2real.datasets import load_era5
+from sim2real.config import paths, names
 import xarray as xr
 import pandas as pd
 

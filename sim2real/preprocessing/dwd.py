@@ -6,8 +6,8 @@ from tqdm import tqdm
 from zipfile import ZipFile, BadZipFile
 import geopandas as gpd
 
-from config import data, paths, names
-from utils import ensure_exists
+from sim2real.config import data, paths, names
+from sim2real.utils import ensure_exists
 
 
 fnames = [
@@ -523,7 +523,7 @@ fnames = [
 
 from_url = "https://opendata.dwd.de/climate_environment/CDC/observations_germany/climate/hourly/air_temperature/recent"
 
-zipped_dir = "./data/raw/dwd/airtemp2m/zipped"
+zipped_dir = f"{paths.root}/data/raw/dwd/airtemp2m/zipped"
 unzipped_dir = paths.raw_dwd
 
 

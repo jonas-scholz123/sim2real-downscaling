@@ -1,5 +1,5 @@
 # %%
-from datasets import DWDSTationData, ECADStationData
+from sim2real.datasets import DWDSTationData, ECADStationData
 import xarray as xr
 
 import matplotlib.pyplot as plt
@@ -83,7 +83,7 @@ def plot_geopandas(gdf, column="TEMP", fig_ax=None, legend=True, vmin=None, vmax
 # %%
 
 if __name__ == "__main__":
-    from config import paths
+    from sim2real.config import paths
 
     dwd_sd = DWDSTationData(paths)
     # era5 = xr.open_dataset("data/raw/ERA_5_Germany/1.grib", engine="cfgrib")

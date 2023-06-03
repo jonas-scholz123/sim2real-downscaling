@@ -8,10 +8,10 @@ from typing import Callable
 from datetime import datetime, timedelta
 import os
 
-from datasets import DWDSTationData
-from plots import plot_geopandas
-from config import paths, names
-from gridder import Gridder
+from sim2real.datasets import DWDSTationData
+from sim2real.plots import plot_geopandas
+from sim2real.config import paths, names
+from sim2real.gridder import Gridder
 
 # %%
 dwd_sd = DWDSTationData(paths)

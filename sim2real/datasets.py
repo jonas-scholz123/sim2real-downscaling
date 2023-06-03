@@ -13,9 +13,9 @@ from geopandas import GeoDataFrame
 import xarray as xr
 import numpy as np
 
-from config import Paths, paths, names, data
-from gridder import Gridder
-from utils import ensure_exists
+from sim2real.config import Paths, paths, names, data
+from sim2real.gridder import Gridder
+from sim2real.utils import ensure_exists
 
 # %%
 
@@ -184,5 +184,11 @@ def load_era5():
         return xr.load_dataset(paths.era5, engine="cfgrib")
 
 
+def load_elevation():
+    pass
+
+
 if __name__ == "__main__":
     dwd_sd = DWDSTationData(paths)
+
+# %%

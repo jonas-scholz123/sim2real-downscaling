@@ -1,6 +1,6 @@
 import pandas as pd
 import geopandas as gpd
-from config import names, data
+from sim2real.config import names, data
 
 
 class Gridder:
