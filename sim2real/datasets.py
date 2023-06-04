@@ -185,7 +185,7 @@ def load_era5():
 
 
 def load_elevation():
-    pass
+    return xr.load_dataset(paths.srtm)
 
 
 if __name__ == "__main__":

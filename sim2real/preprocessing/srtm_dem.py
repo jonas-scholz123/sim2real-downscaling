@@ -17,6 +17,7 @@ def process_srtm():
         }
     )
     elevation = elevation.sel(band=1).drop("band")
+    elevation.name = names.height
     ensure_exists(paths.srtm)
     elevation.to_netcdf(paths.srtm)
 

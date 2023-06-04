@@ -58,7 +58,8 @@ names = Names(
     time="TIME",
 )
 
-root = str(Path(__file__).resolve().parent.parent)
+root = str(Path(__file__).parent.parent.resolve())
+print(root)
 
 paths = Paths(
     root=root,
