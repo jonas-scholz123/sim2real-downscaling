@@ -25,10 +25,59 @@ import cartopy.feature as feature
 class SimTrainer:
     def __init__(self, paths: Paths) -> None:
         self.paths = paths
+
+        # TODO: Make data config
+        self.era5_context_points = 20
+        self.era5_target_points = 100
+
+        self.raw = []
+        self.target = []
+        self.context_points = []
+        self.target_points = []
+
+        self.add_era5()
+        # TODO:
+        # self.add_elevation()
+        # ...
+
+        self.data_processor = self._init_data_processor()
+        self.processed = self.data_processor(self.raw)
+
+        self.task_loader = TaskLoader(context=self.processed, target=self.target)
+
+        self.model = ConvNP(self.data_processor, self.task_loader)
         pass
 
+    def _init_data_processor(self):
+        x1_min = float(min(data[names.lat].min() for data in self.raw))
+        x2_min = float(min(data[names.lon].min() for data in self.raw))
+        x1_max = float(max(data[names.lat].max() for data in self.raw))
+        x2_max = float(max(data[names.lon].max() for data in self.raw))
+        return DataProcessor(
+            time_name=names.time,
+            x1_name=names.lat,
+            x2_name=names.lon,
+            x1_map=(x1_min, x1_max),
+            x2_map=(x2_min, x2_max),
+        )
+
     def add_era5(self):
-        era5 = load_era5()
+        era5 = load_era5()[names.temp]
+        self.raw.append(era5)
+        self.target.append(era5)
+        self.context_points.append(self.era5_context_points)
+        self.target_points.append(self.era5_target_points)
+
+    def get_task(self):
+        date = pd.to_datetime("2022-01-01")
+        task = self.task_loader(date, self.context_points, self.target_points)
+        sample_plot(task)
+        context_target_plot(task)
+
+
+# s = SimTrainer()
+#
+# s.get_task()
 
 
 # %%

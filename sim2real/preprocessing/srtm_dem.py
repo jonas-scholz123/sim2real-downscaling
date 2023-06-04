@@ -1,10 +1,6 @@
 # %%
 from pathlib import Path
 import sys
-
-sys.path.append(str(Path("..").absolute().parent))
-
-
 from sim2real.config import paths, names
 from sim2real.utils import ensure_exists
 import xarray as xr
