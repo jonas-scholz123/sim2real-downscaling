@@ -312,6 +312,8 @@ class SimTrainer:
     def _init_model(self):
         # TODO: Custom model
         model = ConvNP(self.data_processor, self.task_loader)
+        _, self.best_val_loss, _ = load_weights(None, self.best_path, loss_only=True)
+
         if self.opt.start_from == "best":
             model.model, self.best_val_loss, self.start_epoch = load_weights(
                 model.model, self.best_path
@@ -321,7 +323,6 @@ class SimTrainer:
                 model.model, self.latest_path
             )
         else:
-            self.best_val_loss = float("inf")
             self.start_epoch = 0
 
         # Start one epoch after where the last run started.

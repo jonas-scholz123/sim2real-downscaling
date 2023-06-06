@@ -37,11 +37,11 @@ def save_model(model, objective_val, epoch, spec, path):
     )
 
 
-def load_weights(model, path, lik_only=False):
+def load_weights(model, path, loss_only=False):
     try:
         state = torch.load(path)
         val_loss = state["objective"]
-        if lik_only:
+        if loss_only:
             return None, val_loss, None
 
         weights = state["weights"]
