@@ -13,6 +13,7 @@ class Paths:
     era5: str
     raw_srtm: str
     srtm: str
+    out: str
 
 
 @dataclass
@@ -46,6 +47,17 @@ class Names:
 @dataclass
 class OutputSpec:
     wandb: bool
+    plots: bool
+
+
+@dataclass
+class OptimSpec:
+    seed: int
+    device: str
+    batch_size: int
+    batches_per_epoch: int
+    num_epochs: int
+    lr: float
 
 
 names = Names(
@@ -59,7 +71,6 @@ names = Names(
 )
 
 root = str(Path(__file__).parent.parent.resolve())
-print(root)
 
 paths = Paths(
     root=root,
@@ -70,6 +81,7 @@ paths = Paths(
     era5=f"{root}/data/processed/era5/era5_small.nc",
     raw_srtm=f"{root}/data/raw/srtm_dem/srtm_germany_dtm.tif",
     srtm=f"{root}/data/processed/srtm_dem/srtm_germany_dtm.nc",
+    out=f"{root}/_outputs",
 )
 
 data = DataSpec(
@@ -78,4 +90,8 @@ data = DataSpec(
     epsg=4326,
 )
 
-out = OutputSpec(wandb=True)
+opt = OptimSpec(
+    seed=42, device="cpu", batch_size=4, batches_per_epoch=10, num_epochs=5, lr=5e-5
+)
+
+out = OutputSpec(wandb=True, plots=True)

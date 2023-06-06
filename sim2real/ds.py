@@ -1,4 +1,7 @@
 # %%
+import os
+import random
+import wandb
 import xarray as xr
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -8,7 +11,11 @@ from torch.utils.data import Dataset, DataLoader
 import lab as B
 from tqdm import tqdm
 import numpy as np
+from typing import Iterable
+from dataclasses import asdict
 
+
+import neuralprocesses.torch as nps
 import deepsensor.torch
 from deepsensor.data.utils import concat_tasks
 from deepsensor.data.processor import DataProcessor
@@ -16,11 +23,14 @@ from deepsensor.data.loader import TaskLoader
 from deepsensor.model.models import ConvNP
 from deepsensor.plot.utils import plot_context_encoding, plot_offgrid_context
 
-from sim2real.config import paths, names, data, out, Paths
-from sim2real.utils import ensure_exists
+from sim2real.deepsensor.data.task import Task
+from sim2real.utils import ensure_dir_exists, ensure_exists
 from sim2real.datasets import load_elevation, load_era5
+from sim2real.plots import save_plot
 import cartopy.crs as ccrs
 import cartopy.feature as feature
+
+from sim2real.config import paths, names, data, out, Paths, opt
 
 
 def sample_plot(model, task, task_loader):
@@ -61,9 +71,14 @@ class SimTrainer:
         # TODO: Make data config.
         self.era5_context_points = (5, 30)
         self.era5_target_points = 100
+        self.time_freq = "D"
+        self.opt = opt
+        self.out = out
 
-        # TODO: Make opt config.
-        batch_size = 4
+        B.set_global_device(self.opt.device)
+        torch.set_default_device(self.opt.device)
+        # B.cholesky_retry_factor = 1e6
+        # B.epsilon = 1e-5
 
         self.raw = []
         self.target = []
@@ -78,7 +93,7 @@ class SimTrainer:
         self.target = self.data_processor(self.target)
 
         self.task_loader = TaskLoader(
-            context=self.processed, target=self.target, time_freq="H"
+            context=self.processed, target=self.target, time_freq="D"
         )
 
         # TODO: validation, evaluation
@@ -93,13 +108,23 @@ class SimTrainer:
 
         # Don't turn into pytorch tensors. We just want the sampling functionality.
         self.train_loader = DataLoader(
-            train_set, shuffle=True, batch_size=batch_size, collate_fn=concat_tasks
+            train_set,
+            shuffle=True,
+            batch_size=self.opt.batch_size,
+            collate_fn=concat_tasks,
         )
 
-        self.model = ConvNP(self.data_processor, self.task_loader)
-        self.opt = optim.Adam(self.model.model.parameters(), lr=5e-4)
+        self._init_log()
 
-        pass
+        self.model = ConvNP(self.data_processor, self.task_loader)
+        self.model.model = self.model.model.to(self.opt.device)
+
+        self._init_log()
+
+    def _set_seeds(self):
+        B.set_random_seed(self.opt.seed)
+        np.random.seed(self.opt.seed)
+        torch.manual_seed(self.opt.seed)
 
     def _init_data_processor(self):
         x1_min = float(min(data[names.lat].min() for data in self.raw))
@@ -132,44 +157,86 @@ class SimTrainer:
         self.raw.append(elevation)
         self.context_points.append("all")
 
+    def _task_to_device(self, task: Task):
+        def _to_device(item):
+            if isinstance(item, nps.mask.Masked):
+                item.mask = item.mask.to(self.device)
+                item.y = item.y.to(self.device)
+
+            if isinstance(item, torch.Tensor):
+                return item.to(self.device)
+
+            if isinstance(item, list):
+                return [_to_device(el) for el in item]
+
+            if isinstance(item, tuple):
+                return tuple([_to_device(el) for el in item])
+
+            return item
+
+        # NOTE: this is not robust and would be much
+        # more appropriate in modify_tensor or similar.
+
+        for k in ["X_c", "X_t", "Y_c", "Y_t"]:
+            task[k] = _to_device(task[k])
+
+        return task
+
     def train_on_batch(self, tasks):
         if not isinstance(tasks, list):
             tasks = [tasks]
-        self.opt.zero_grad()
+        self.optimiser.zero_grad()
         task_losses = []
         for task in tasks:
             task_losses.append(self.model.loss_fn(task, normalise=True))
         mean_batch_loss = B.mean(torch.stack(task_losses))
         mean_batch_loss.backward()
-        self.opt.step()
+        self.optimiser.step()
         return mean_batch_loss.detach().cpu().numpy()
 
     def train(self):
-        n_batches = 10
-        n_epochs = 20
         epoch_losses = []
 
         train_iter = iter(self.train_loader)
+        self.optimiser = optim.Adam(self.model.model.parameters(), lr=self.opt.lr)
 
-        pbar = tqdm(range(1, n_epochs + 1))
-
-        for epoch in pbar:
+        for epoch in self.pbar:
             batch_losses = []
-            for _ in range(n_batches):
+            for _ in range(self.opt.batches_per_epoch):
                 task = next(train_iter)
+                # task = self._task_to_device(task)
                 task["Y_c"][1].mask = task["Y_c"][1].mask[:, 0:1, :]
                 batch_loss = self.train_on_batch(task)
                 batch_losses.append(batch_loss)
-                # self.wandb.log({"epoch": epoch, "train_loss": batch_loss})
 
-            epoch_loss = np.mean(batch_losses)
-            epoch_losses.append(epoch_loss)
-            pbar.set_postfix({"loss": epoch_loss})
+            train_loss = np.mean(batch_losses)
+            epoch_losses.append(train_loss)
+            self._log(epoch, train_loss)
 
-    def plot_prediction(self):
-        # TODO: generalise.
-        test_date = pd.Timestamp("2022-01-01")
+            if out.plots:
+                for date in ["2022-01-01", "2022-06-01"]:
+                    self.plot_prediction(name=f"epoch_{epoch}_{date}", date=date)
+
+    def _init_log(self):
+        self.pbar = tqdm(range(1, self.opt.num_epochs + 1))
+        if self.out.wandb:
+            config = {
+                "opt": asdict(opt),
+                "data": asdict(data),
+                "model": "inferred",
+            }
+            self.wandb = wandb.init(project="climate-sim2real", config=config)
+
+    def _log(self, epoch, train_loss):
+        self.pbar.set_postfix({"loss": train_loss})
+        if self.out.wandb:
+            self.wandb.log({"epoch": epoch, "train_loss": train_loss})
+
+    def plot_prediction(self, name=None, date="2022-01-01"):
+        test_date = pd.Timestamp(date)
         task = self.task_loader(test_date, context_sampling=(30, "all"))
+        # task = self.model.modify_task(task)
+        # task = self._task_to_device(task)
 
         mean_ds, std_ds = self.model.predict(task, X_t=self.era5)
 
@@ -183,35 +250,60 @@ class SimTrainer:
         std_ds = std_ds.assign_coords(coord_map)
         err_da = mean_ds[names.temp] - self.era5
 
-        # proj = ccrs.TransverseMercator(central_longitude=10)
-        proj = ccrs.PlateCarree()
+        proj = ccrs.TransverseMercator(central_longitude=10, approx=False)
 
         fig, axs = plt.subplots(
-            subplot_kw={"projection": proj}, nrows=1, ncols=4, figsize=(20, 5)
+            subplot_kw={"projection": proj}, nrows=1, ncols=4, figsize=(10, 2.5)
         )
 
         sel = {names.time: task["time"]}
 
-        self.era5.sel(sel).plot(cmap="seismic", ax=axs[0])
+        self.era5.sel(sel).plot(cmap="seismic", ax=axs[0], transform=ccrs.PlateCarree())
         axs[0].set_title("ERA5")
-        mean_ds[names.temp].sel(sel).plot(cmap="seismic", ax=axs[1])
+        mean_ds[names.temp].sel(sel).plot(
+            cmap="seismic", ax=axs[1], transform=ccrs.PlateCarree()
+        )
         axs[1].set_title("ConvNP mean")
-        std_ds[names.temp].sel(sel).plot(cmap="Greys", ax=axs[2])
+        std_ds[names.temp].sel(sel).plot(
+            cmap="Greys", ax=axs[2], transform=ccrs.PlateCarree()
+        )
         axs[2].set_title("ConvNP std dev")
-        err_da.sel(sel).plot(cmap="seismic", ax=axs[3])
+        err_da.sel(sel).plot(cmap="seismic", ax=axs[3], transform=ccrs.PlateCarree())
         axs[3].set_title("ConvNP error")
-        plot_offgrid_context(axs, task, self.data_processor, s=3**2, linewidths=0.5)
+        plot_offgrid_context(
+            axs,
+            task,
+            self.data_processor,
+            s=3**2,
+            linewidths=0.5,
+            add_legend=False,
+            transform=ccrs.PlateCarree(),
+        )
 
         bounds = [*data.bounds.lon, *data.bounds.lat]
         for ax in axs:
             ax.set_extent(bounds, crs=ccrs.PlateCarree())
             ax.add_feature(feature.BORDERS, linewidth=0.25)
-            ax.add_feature(feature.LAKES, linewidth=0.25)
-            ax.add_feature(feature.RIVERS, linewidth=0.25)
-            ax.add_feature(feature.OCEAN)
-            ax.add_feature(feature.LAND)
+            # ax.add_feature(feature.LAKES, linewidth=0.25)
+            # ax.add_feature(feature.RIVERS, linewidth=0.25)
+            # ax.add_feature(feature.OCEAN)
+            # ax.add_feature(feature.LAND)
             ax.coastlines(linewidth=0.25)
-        plt.show()
+
+        if name is not None:
+            ensure_exists(paths.out)
+            save_plot(name, fig)
+        else:
+            plt.show()
+
+        plt.clf()
+
+    def loss_test(self):
+        train_iter = iter(self.train_loader)
+        task = next(train_iter)
+        # task = self._task_to_device(task)
+        task["Y_c"][1].mask = task["Y_c"][1].mask[:, 0:1, :]
+        print("final: ", self.model.loss_fn(task, normalise=True))
 
 
 class Taskset(Dataset):
@@ -229,7 +321,7 @@ class Taskset(Dataset):
         if isinstance(num_context, list):
             return [self._map_num_context(el) for el in num_context]
         elif isinstance(num_context, tuple):
-            return np.random.randint(num_context)
+            return np.random.randint(*num_context)
         else:
             return num_context
 
@@ -240,10 +332,11 @@ class Taskset(Dataset):
         # Random number of context observations
         num_context = self._map_num_context(self.num_context)
         date = self.dates[idx]
-        task = self.task_loader(date, num_context, self.num_target)
+        task = self.task_loader(date, num_context, self.num_target, deterministic=True)
         return task
 
 
 s = SimTrainer(paths)
+# s.loss_test()
 s.train()
-s.plot_prediction()
+# s.plot_prediction()
