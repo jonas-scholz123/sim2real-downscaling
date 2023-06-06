@@ -3,6 +3,8 @@ data/
 outputs/
 *.DS_Store
 deepsensor/
+_outputs/
+wandb/
 
 suggestions.txt
 
