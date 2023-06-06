@@ -27,6 +27,10 @@ class DataSpec:
     bounds: Bounds
     crs_str: str
     epsg: int
+    train_dates: Tuple[str, str]
+    cv_dates: Tuple[str, str]
+    test_dates: Tuple[str, str]
+    val_freq: str
 
 
 @dataclass
@@ -55,9 +59,11 @@ class OptimSpec:
     seed: int
     device: str
     batch_size: int
+    batch_size_val: int
     batches_per_epoch: int
     num_epochs: int
     lr: float
+    start_from: str
 
 
 names = Names(
@@ -88,10 +94,23 @@ data = DataSpec(
     bounds=Bounds(lat=(47.2, 54.95), lon=(5.8, 15.05)),
     crs_str="epsg:4326",
     epsg=4326,
+    train_dates=("2012-01-01", "2020-12-31"),
+    cv_dates=("2021-01-01", "2021-12-31"),
+    test_dates=("2022-01-01", "2022-12-31"),
+    # This should be set in a way that ensures all times
+    # of day are covered.
+    val_freq="39H",
 )
 
 opt = OptimSpec(
-    seed=42, device="cpu", batch_size=4, batches_per_epoch=10, num_epochs=5, lr=5e-5
+    seed=42,
+    device="cpu",
+    batch_size=16,
+    batch_size_val=128,
+    batches_per_epoch=100,
+    num_epochs=100,
+    lr=5e-4,
+    start_from=None,  # None, best, latest
 )
 
 out = OutputSpec(wandb=True, plots=True)

@@ -11,7 +11,7 @@ from torch.utils.data import Dataset, DataLoader
 import lab as B
 from tqdm import tqdm
 import numpy as np
-from typing import Iterable
+from typing import Iterable, Tuple
 from dataclasses import asdict
 
 
@@ -24,13 +24,63 @@ from deepsensor.model.models import ConvNP
 from deepsensor.plot.utils import plot_context_encoding, plot_offgrid_context
 
 from sim2real.deepsensor.data.task import Task
-from sim2real.utils import ensure_dir_exists, ensure_exists
+from sim2real.utils import (
+    ensure_dir_exists,
+    ensure_exists,
+    exp_dir_sim,
+    save_model,
+    load_weights,
+)
+from sim2real import utils
 from sim2real.datasets import load_elevation, load_era5
 from sim2real.plots import save_plot
 import cartopy.crs as ccrs
 import cartopy.feature as feature
 
 from sim2real.config import paths, names, data, out, Paths, opt
+
+
+class Taskset(Dataset):
+    def __init__(
+        self,
+        time_range: Tuple[str, str],
+        taskloader: TaskLoader,
+        num_context,
+        num_target,
+        freq="H",
+        deterministic=False,
+    ) -> None:
+        self.dates = pd.date_range(*time_range, freq=freq)
+        self.num_context, self.num_target = num_context, num_target
+        self.task_loader = taskloader
+        self.deterministic = deterministic
+        self.rng = np.random.default_rng(opt.seed + 1)
+
+    def _map_num_context(self, num_context):
+        """
+        Map num_context specs to something understandable by TaskLoader.
+        """
+        if isinstance(num_context, list):
+            return [self._map_num_context(el) for el in num_context]
+        elif isinstance(num_context, tuple):
+            return int(self.rng.integers(*num_context))
+        else:
+            return num_context
+
+    def __len__(self):
+        return len(self.dates)
+
+    def __getitem__(self, idx):
+        if idx == len(self) - 1 and self.deterministic:
+            # Reset rng for deterministic
+            self.rng = np.random.default_rng(opt.seed + 1)
+        # Random number of context observations
+        num_context = self._map_num_context(self.num_context)
+        date = self.dates[idx]
+        task = self.task_loader(
+            date, num_context, self.num_target, deterministic=self.deterministic
+        )
+        return task
 
 
 def sample_plot(model, task, task_loader):
@@ -74,6 +124,11 @@ class SimTrainer:
         self.time_freq = "D"
         self.opt = opt
         self.out = out
+        self.exp_dir = exp_dir_sim()
+        self.latest_path = f"{utils.weight_dir(self.exp_dir)}/latest.h5"
+        self.best_path = f"{utils.weight_dir(self.exp_dir)}/best.h5"
+
+        [ensure_dir_exists(path) for path in [self.latest_path, self.best_path]]
 
         B.set_global_device(self.opt.device)
         torch.set_default_device(self.opt.device)
@@ -93,17 +148,33 @@ class SimTrainer:
         self.target = self.data_processor(self.target)
 
         self.task_loader = TaskLoader(
-            context=self.processed, target=self.target, time_freq="D"
-        )
-
-        # TODO: validation, evaluation
-        start, end = (
-            self.era5[names.time].values.min(),
-            self.era5[names.time].values.max(),
+            context=self.processed, target=self.target, time_freq="H"
         )
 
         train_set = Taskset(
-            start, end, self.task_loader, self.context_points, self.target_points
+            data.train_dates,
+            self.task_loader,
+            self.context_points,
+            self.target_points,
+            deterministic=False,
+        )
+
+        cv_set = Taskset(
+            data.cv_dates,
+            self.task_loader,
+            self.context_points,
+            self.target_points,
+            data.val_freq,
+            deterministic=True,
+        )
+
+        test_set = Taskset(
+            data.test_dates,
+            self.task_loader,
+            self.context_points,
+            self.target_points,
+            data.val_freq,
+            deterministic=True,
         )
 
         # Don't turn into pytorch tensors. We just want the sampling functionality.
@@ -114,10 +185,21 @@ class SimTrainer:
             collate_fn=concat_tasks,
         )
 
-        self._init_log()
+        self.cv_loader = DataLoader(
+            cv_set,
+            shuffle=False,
+            batch_size=self.opt.batch_size_val,
+            collate_fn=concat_tasks,
+        )
 
-        self.model = ConvNP(self.data_processor, self.task_loader)
-        self.model.model = self.model.model.to(self.opt.device)
+        self.test_loader = DataLoader(
+            test_set,
+            shuffle=False,
+            batch_size=self.opt.batch_size_val,
+            collate_fn=concat_tasks,
+        )
+
+        self._init_model()
 
         self._init_log()
 
@@ -157,30 +239,24 @@ class SimTrainer:
         self.raw.append(elevation)
         self.context_points.append("all")
 
-    def _task_to_device(self, task: Task):
-        def _to_device(item):
-            if isinstance(item, nps.mask.Masked):
-                item.mask = item.mask.to(self.device)
-                item.y = item.y.to(self.device)
+    def eval_on_batch(self, tasks):
+        with torch.no_grad():
+            if not isinstance(tasks, list):
+                tasks = [tasks]
+            task_losses = []
+            for task in tasks:
+                task_losses.append(self.model.loss_fn(task, normalise=True))
+            mean_batch_loss = B.mean(torch.stack(task_losses))
 
-            if isinstance(item, torch.Tensor):
-                return item.to(self.device)
+        return float(mean_batch_loss.detach().cpu().numpy())
 
-            if isinstance(item, list):
-                return [_to_device(el) for el in item]
-
-            if isinstance(item, tuple):
-                return tuple([_to_device(el) for el in item])
-
-            return item
-
-        # NOTE: this is not robust and would be much
-        # more appropriate in modify_tensor or similar.
-
-        for k in ["X_c", "X_t", "Y_c", "Y_t"]:
-            task[k] = _to_device(task[k])
-
-        return task
+    def evaluate(self):
+        batch_losses = []
+        for i, task in enumerate(self.cv_loader):
+            task["Y_c"][1].mask = task["Y_c"][1].mask[:, 0:1, :]
+            batch_loss = self.eval_on_batch(task)
+            batch_losses.append(batch_loss)
+        return np.mean(batch_losses)
 
     def train_on_batch(self, tasks):
         if not isinstance(tasks, list):
@@ -192,33 +268,77 @@ class SimTrainer:
         mean_batch_loss = B.mean(torch.stack(task_losses))
         mean_batch_loss.backward()
         self.optimiser.step()
-        return mean_batch_loss.detach().cpu().numpy()
+        return float(mean_batch_loss.detach().cpu().numpy())
 
     def train(self):
         epoch_losses = []
 
         train_iter = iter(self.train_loader)
+
         self.optimiser = optim.Adam(self.model.model.parameters(), lr=self.opt.lr)
+
+        self.pbar = tqdm(range(self.start_epoch, self.opt.num_epochs + 1))
+
+        if self.start_epoch == 1:
+            val_loss = self.evaluate()
+            self._log(0, val_loss, val_loss)
 
         for epoch in self.pbar:
             batch_losses = []
             for _ in range(self.opt.batches_per_epoch):
-                task = next(train_iter)
-                # task = self._task_to_device(task)
+                # Usually one epoch would be going through the whole dataset.
+                # This is too long for us and we want to monitor more often.
+                # Even though it's a bit hacky we check if we've run out of tasks
+                # and reset the data iterator if so.
+                try:
+                    task = next(train_iter)
+                except StopIteration:
+                    train_iter = iter(self.train_loader)
+                    task = next(train_iter)
                 task["Y_c"][1].mask = task["Y_c"][1].mask[:, 0:1, :]
                 batch_loss = self.train_on_batch(task)
                 batch_losses.append(batch_loss)
 
             train_loss = np.mean(batch_losses)
             epoch_losses.append(train_loss)
-            self._log(epoch, train_loss)
+            val_lik = self.evaluate()
+            self._log(epoch, train_loss, val_lik)
+            self._save_weights(epoch, val_lik)
 
             if out.plots:
                 for date in ["2022-01-01", "2022-06-01"]:
                     self.plot_prediction(name=f"epoch_{epoch}_{date}", date=date)
 
+    def _init_model(self):
+        # TODO: Custom model
+        model = ConvNP(self.data_processor, self.task_loader)
+        if self.opt.start_from == "best":
+            model.model, self.best_val_loss, self.start_epoch = load_weights(
+                model.model, self.best_path
+            )
+        elif self.opt.start_from == "latest":
+            model.model, self.best_val_loss, self.start_epoch = load_weights(
+                model.model, self.latest_path
+            )
+        else:
+            self.best_val_loss = float("inf")
+            self.start_epoch = 0
+
+        # Start one epoch after where the last run started.
+        self.start_epoch += 1
+        model.model = model.model.to(self.opt.device)
+        self.model = model
+
+    def _save_weights(self, epoch, val_loss):
+        save_model(self.model.model, val_loss, epoch, spec=None, path=self.latest_path)
+
+        if val_loss < self.best_val_loss:
+            self.best_val_loss = val_loss
+            save_model(
+                self.model.model, val_loss, epoch, spec=None, path=self.best_path
+            )
+
     def _init_log(self):
-        self.pbar = tqdm(range(1, self.opt.num_epochs + 1))
         if self.out.wandb:
             config = {
                 "opt": asdict(opt),
@@ -227,8 +347,8 @@ class SimTrainer:
             }
             self.wandb = wandb.init(project="climate-sim2real", config=config)
 
-    def _log(self, epoch, train_loss):
-        self.pbar.set_postfix({"loss": train_loss})
+    def _log(self, epoch, train_loss, val_loss):
+        self.pbar.set_postfix({"train_loss": train_loss, "val_loss": val_loss})
         if self.out.wandb:
             self.wandb.log({"epoch": epoch, "train_loss": train_loss})
 
@@ -284,52 +404,19 @@ class SimTrainer:
         for ax in axs:
             ax.set_extent(bounds, crs=ccrs.PlateCarree())
             ax.add_feature(feature.BORDERS, linewidth=0.25)
-            # ax.add_feature(feature.LAKES, linewidth=0.25)
-            # ax.add_feature(feature.RIVERS, linewidth=0.25)
-            # ax.add_feature(feature.OCEAN)
-            # ax.add_feature(feature.LAND)
             ax.coastlines(linewidth=0.25)
 
         if name is not None:
             ensure_exists(paths.out)
-            save_plot(name, fig)
+            save_plot(self.exp_dir, name, fig)
         else:
             plt.show()
 
+        plt.close()
         plt.clf()
 
 
-class Taskset(Dataset):
-    def __init__(
-        self, start, end, taskloader: TaskLoader, num_context, num_target
-    ) -> None:
-        self.dates = pd.date_range(start, end)
-        self.num_context, self.num_target = num_context, num_target
-        self.task_loader = taskloader
-
-    def _map_num_context(self, num_context):
-        """
-        Map num_context specs to something understandable by TaskLoader.
-        """
-        if isinstance(num_context, list):
-            return [self._map_num_context(el) for el in num_context]
-        elif isinstance(num_context, tuple):
-            return np.random.randint(*num_context)
-        else:
-            return num_context
-
-    def __len__(self):
-        return len(self.dates)
-
-    def __getitem__(self, idx):
-        # Random number of context observations
-        num_context = self._map_num_context(self.num_context)
-        date = self.dates[idx]
-        task = self.task_loader(date, num_context, self.num_target, deterministic=True)
-        return task
-
-
 s = SimTrainer(paths)
-# s.loss_test()
 s.train()
+
 # s.plot_prediction()

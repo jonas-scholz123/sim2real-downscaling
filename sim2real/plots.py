@@ -1,5 +1,6 @@
 # %%
 from sim2real.datasets import DWDSTationData, ECADStationData
+from sim2real.utils import ensure_dir_exists
 import xarray as xr
 
 import matplotlib.pyplot as plt
@@ -8,8 +9,9 @@ import geopandas as gpd
 from config import paths
 
 
-def save_plot(name, fig=None):
-    path = f"{paths.out}/{name}.pdf"
+def save_plot(exp_path, name, fig=None):
+    path = f"{exp_path}/plots/{name}.pdf"
+    ensure_dir_exists(path)
     if fig is None:
         plt.savefig(path, bbox_inches="tight")
     else:

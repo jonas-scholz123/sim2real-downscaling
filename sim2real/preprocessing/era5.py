@@ -23,5 +23,5 @@ def process_era5(cutoff_time):
 
 
 if __name__ == "__main__":
-    cutoff_time = "2020-01-01"
+    cutoff_time = "2000-01-01"
     process_era5(cutoff_time)
