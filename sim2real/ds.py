@@ -298,13 +298,6 @@ class SimTrainer:
 
         plt.clf()
 
-    def loss_test(self):
-        train_iter = iter(self.train_loader)
-        task = next(train_iter)
-        # task = self._task_to_device(task)
-        task["Y_c"][1].mask = task["Y_c"][1].mask[:, 0:1, :]
-        print("final: ", self.model.loss_fn(task, normalise=True))
-
 
 class Taskset(Dataset):
     def __init__(
