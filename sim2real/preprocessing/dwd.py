@@ -7,7 +7,7 @@ from zipfile import ZipFile, BadZipFile
 import geopandas as gpd
 
 from sim2real.config import data, paths, names
-from sim2real.utils import ensure_exists
+from sim2real.utils import ensure_dir_exists
 
 
 fnames = [
@@ -623,8 +623,8 @@ def process_dwd():
     meta_df.crs = data.crs_str
 
     # cache for faster loading in future.
-    ensure_exists(paths.dwd)
-    ensure_exists(paths.dwd_meta)
+    ensure_dir_exists(paths.dwd)
+    ensure_dir_exists(paths.dwd_meta)
     df.to_feather(paths.dwd)
     meta_df.to_feather(paths.dwd_meta)
 

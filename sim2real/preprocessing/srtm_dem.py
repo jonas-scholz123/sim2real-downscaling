@@ -2,7 +2,7 @@
 from pathlib import Path
 import sys
 from sim2real.config import paths, names
-from sim2real.utils import ensure_exists
+from sim2real.utils import ensure_dir_exists
 import xarray as xr
 import pandas as pd
 
@@ -18,7 +18,7 @@ def process_srtm():
     )
     elevation = elevation.sel(band=1).drop("band")
     elevation.name = names.height
-    ensure_exists(paths.srtm)
+    ensure_dir_exists(paths.srtm)
     elevation.to_netcdf(paths.srtm)
 
 

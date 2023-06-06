@@ -15,7 +15,7 @@ import numpy as np
 
 from sim2real.config import Paths, paths, names, data
 from sim2real.gridder import Gridder
-from sim2real.utils import ensure_exists
+from sim2real.utils import ensure_dir_exists
 
 # %%
 

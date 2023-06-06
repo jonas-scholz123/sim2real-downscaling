@@ -5,6 +5,15 @@ import xarray as xr
 import matplotlib.pyplot as plt
 import pandas as pd
 import geopandas as gpd
+from config import paths
+
+
+def save_plot(name, fig=None):
+    path = f"{paths.out}/{name}.pdf"
+    if fig is None:
+        plt.savefig(path, bbox_inches="tight")
+    else:
+        fig.savefig(path, bbox_inches="tight")
 
 
 class CountryPlot:
