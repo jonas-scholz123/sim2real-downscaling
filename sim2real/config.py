@@ -110,7 +110,7 @@ opt = OptimSpec(
     batches_per_epoch=100,
     num_epochs=100,
     lr=5e-4,
-    start_from=None,  # None, best, latest
+    start_from="best",  # None, "best", "latest"
 )
 
 out = OutputSpec(wandb=True, plots=True)

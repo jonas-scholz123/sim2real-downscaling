@@ -327,6 +327,7 @@ class SimTrainer:
 
         # Start one epoch after where the last run started.
         self.start_epoch += 1
+        print(f"Starting from episode {self.start_epoch}")
         model.model = model.model.to(self.opt.device)
         self.model = model
 
