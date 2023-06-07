@@ -23,7 +23,6 @@ from deepsensor.data.loader import TaskLoader
 from deepsensor.model.models import ConvNP
 from deepsensor.plot.utils import plot_context_encoding, plot_offgrid_context
 
-from sim2real.deepsensor.data.task import Task
 from sim2real.utils import (
     ensure_dir_exists,
     ensure_exists,
@@ -312,18 +311,33 @@ class SimTrainer:
     def _init_model(self):
         # TODO: Custom model
         model = ConvNP(self.data_processor, self.task_loader)
-        _, self.best_val_loss, _ = load_weights(None, self.best_path, loss_only=True)
+        self.best_val_loss = load_weights(None, self.best_path, loss_only=True)[1]
 
         if self.opt.start_from == "best":
-            model.model, self.best_val_loss, self.start_epoch = load_weights(
-                model.model, self.best_path
-            )
+            (
+                model.model,
+                self.best_val_loss,
+                self.start_epoch,
+                torch_state,
+                numpy_state,
+            ) = load_weights(model.model, self.best_path)
         elif self.opt.start_from == "latest":
-            model.model, self.best_val_loss, self.start_epoch = load_weights(
-                model.model, self.latest_path
-            )
+            (
+                model.model,
+                self.best_val_loss,
+                self.start_epoch,
+                torch_state,
+                numpy_state,
+            ) = load_weights(model.model, self.latest_path)
         else:
             self.start_epoch = 0
+            torch_state, numpy_state = None, None
+
+        # Return RNG for seamless continuation.
+        if torch_state is not None:
+            torch.set_rng_state(torch_state)
+        if numpy_state is not None:
+            np.random.set_state(numpy_state)
 
         # Start one epoch after where the last run started.
         self.start_epoch += 1
@@ -332,12 +346,28 @@ class SimTrainer:
         self.model = model
 
     def _save_weights(self, epoch, val_loss):
-        save_model(self.model.model, val_loss, epoch, spec=None, path=self.latest_path)
+        torch_state = torch.get_rng_state()
+        numpy_state = np.random.get_state()
+        save_model(
+            self.model.model,
+            val_loss,
+            epoch,
+            spec=None,
+            path=self.latest_path,
+            torch_state=torch_state,
+            numpy_state=numpy_state,
+        )
 
         if val_loss < self.best_val_loss:
             self.best_val_loss = val_loss
             save_model(
-                self.model.model, val_loss, epoch, spec=None, path=self.best_path
+                self.model.model,
+                val_loss,
+                epoch,
+                spec=None,
+                path=self.best_path,
+                torch_state=torch_state,
+                numpy_state=numpy_state,
             )
 
     def _init_log(self):
@@ -357,8 +387,6 @@ class SimTrainer:
     def plot_prediction(self, name=None, date="2022-01-01"):
         test_date = pd.Timestamp(date)
         task = self.task_loader(test_date, context_sampling=(30, "all"))
-        # task = self.model.modify_task(task)
-        # task = self._task_to_device(task)
 
         mean_ds, std_ds = self.model.predict(task, X_t=self.era5)
 

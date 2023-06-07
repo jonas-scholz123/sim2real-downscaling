@@ -25,13 +25,17 @@ def weight_dir(exp_dir):
     return path
 
 
-def save_model(model, objective_val, epoch, spec, path):
+def save_model(
+    model, objective_val, epoch, spec, path, torch_state=None, numpy_state=None
+):
     torch.save(
         {
             "weights": model.state_dict(),
             "objective": objective_val,
             "epoch": epoch,
             "spec": spec,
+            "torch_state": torch_state,
+            "numpy_state": numpy_state,
         },
         path,
     )
@@ -46,6 +50,12 @@ def load_weights(model, path, loss_only=False):
 
         weights = state["weights"]
         model.load_state_dict(weights)
-        return model, val_loss, state["epoch"]
-    except FileNotFoundError:
-        return model, float("inf"), 0
+        return (
+            model,
+            val_loss,
+            state["epoch"],
+            state["torch_state"],
+            state["numpy_state"],
+        )
+    except (FileNotFoundError, KeyError):
+        return model, float("inf"), 0, None, None
