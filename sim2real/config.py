@@ -31,6 +31,9 @@ class DataSpec:
     cv_dates: Tuple[str, str]
     test_dates: Tuple[str, str]
     val_freq: str
+    era5_context: Tuple[int, int]
+    era5_target: int
+    aux_coarsen_factor: float
 
 
 @dataclass
@@ -52,6 +55,7 @@ class Names:
 class OutputSpec:
     wandb: bool
     plots: bool
+    wandb_name: str = None
 
 
 @dataclass
@@ -100,17 +104,23 @@ data = DataSpec(
     # This should be set in a way that ensures all times
     # of day are covered.
     val_freq="39H",
+    era5_context=(5, 30),
+    era5_target=100,
+    # How much more dense should the elevation data
+    # be compared to the era5 data? Smaller => more dense
+    # aux data.
+    aux_coarsen_factor=1,
 )
 
 opt = OptimSpec(
     seed=42,
-    device="cpu",
+    device="mps",
     batch_size=16,
     batch_size_val=128,
     batches_per_epoch=50,
-    num_epochs=100,
-    lr=5e-4,
-    start_from="best",  # None, "best", "latest"
+    num_epochs=250,
+    lr=3e-3,
+    start_from=None,  # None, "best", "latest"
 )
 
-out = OutputSpec(wandb=True, plots=True)
+out = OutputSpec(wandb=True, plots=True, wandb_name="deeper and thinner")
