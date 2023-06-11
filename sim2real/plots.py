@@ -1,16 +1,19 @@
 # %%
-from sim2real.datasets import DWDSTationData, ECADStationData
+from sim2real.datasets import DWDSTationData, ECADStationData, load_era5
 from sim2real.utils import ensure_dir_exists
 import xarray as xr
 
 import matplotlib.pyplot as plt
 import pandas as pd
 import geopandas as gpd
-from config import paths
+from sim2real.config import paths, names, data
 
 
 def save_plot(exp_path, name, fig=None):
-    path = f"{exp_path}/plots/{name}.pdf"
+    if exp_path is None:
+        path = f"{paths.out}/figures/{name}.pdf"
+    else:
+        path = f"{exp_path}/plots/{name}.pdf"
     ensure_dir_exists(path)
     if fig is None:
         plt.savefig(path, bbox_inches="tight")
@@ -28,6 +31,7 @@ class CountryPlot:
     ) -> None:
         self.vmin = -5
         self.vmax = 30
+        self.vmin, self.vmax = None, None
         self.cm = "coolwarm"
 
         self.dwd = None
@@ -48,9 +52,6 @@ class CountryPlot:
             # TODO
             raise NotImplementedError
 
-    def show(self):
-        self.fig.show()
-
     def plot(self, datetime):
         datetime = pd.to_datetime(datetime)
         fig, ax = plt.subplots(1, 1, figsize=(10, 10))
@@ -63,7 +64,7 @@ class CountryPlot:
             gdf = self.dwd.at_datetime(datetime)
             gdf.plot(
                 ax=ax,
-                column="TEMP",
+                column=names.temp,
                 edgecolors="gray",
                 cmap=self.cm,
                 vmin=self.vmin,
@@ -79,31 +80,68 @@ class CountryPlot:
         return fig, ax
 
 
-def plot_geopandas(gdf, column="TEMP", fig_ax=None, legend=True, vmin=None, vmax=None):
+def plot_geopandas(
+    gdf, column=names.temp, fig_ax=None, legend=True, vmin=None, vmax=None
+):
     if fig_ax is not None:
         fig, ax = fig_ax
     else:
         fig, ax = plt.subplots(1, 1, figsize=(10, 10))
-    country = gpd.read_file("data/shapefiles/DEU_adm0.shp")
+    country = gpd.read_file("../data/shapefiles/DEU_adm0.shp")
     country.crs = "epsg:4326"
     gdf.plot(column=column, ax=ax, legend=legend, vmin=vmin, vmax=vmax)
     country.plot(edgecolor="black", ax=ax, alpha=1, facecolor="none")
     return fig, ax
 
 
-# %%
-
 if __name__ == "__main__":
     from sim2real.config import paths
 
     dwd_sd = DWDSTationData(paths)
-    # era5 = xr.open_dataset("data/raw/ERA_5_Germany/1.grib", engine="cfgrib")
+    era5 = load_era5()
 
-    cp = CountryPlot(
-        shapefile_path="data/shapefiles/DEU_adm0.shp", era5=None, dwd_data=dwd_sd
-    )
-    datetime = "2022-02-22 14:00:00"
-    cp.plot(datetime)
-    # %%
+    datetime = "2022-04-25 14:00:00"
     gdf = dwd_sd.at_datetime(datetime)
-    plot_geopandas(gdf)
+    import cartopy.crs as ccrs
+    import cartopy.feature as feature
+    from deepsensor.plot.utils import plot_context_encoding, plot_offgrid_context
+
+    vmin = 4
+    vmax = 18
+
+    proj = ccrs.TransverseMercator(central_longitude=10, approx=False)
+    fig, axs = plt.subplots(
+        subplot_kw={"projection": proj}, nrows=2, ncols=1, figsize=(5, 10)
+    )
+    bounds = [*data.bounds.lon, *data.bounds.lat]
+
+    gdf = gdf.sample(frac=0.1, random_state=4)
+
+    gdf.crs = proj
+
+    gdf.plot(
+        column=names.temp,
+        ax=axs[0],
+        cmap="seismic",
+        transform=ccrs.PlateCarree(),
+        edgecolors="black",
+        linewidth=0.25,
+        legend=False,
+        vmin=vmin,
+        vmax=vmax,
+    )
+
+    sel = {names.time: pd.to_datetime(datetime)}
+
+    era5[names.temp].sel(sel).plot(
+        ax=axs[1], transform=ccrs.PlateCarree(), cmap="seismic", vmin=vmin, vmax=vmax
+    )
+
+    for ax in axs:
+        ax.set_extent(bounds, crs=ccrs.PlateCarree())
+        ax.add_feature(feature.BORDERS, linewidth=0.25)
+        ax.coastlines(linewidth=0.25)
+
+    axs[1].set_title("")
+    axs[1].set_ylabel("aaa")
+    save_plot(None, "real_and_era_5")

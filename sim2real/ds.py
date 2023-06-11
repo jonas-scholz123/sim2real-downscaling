@@ -5,6 +5,7 @@ import wandb
 import xarray as xr
 import pandas as pd
 import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
 import torch.optim as optim
 import torch
 from torch.utils.data import Dataset, DataLoader
@@ -17,11 +18,15 @@ from dataclasses import asdict
 
 import neuralprocesses.torch as nps
 import deepsensor.torch
-from deepsensor.data.utils import concat_tasks
+from deepsensor.data.utils import (
+    concat_tasks,
+    construct_x1x2_ds,
+    construct_circ_time_ds,
+)
 from deepsensor.data.processor import DataProcessor
 from deepsensor.data.loader import TaskLoader
 from deepsensor.model.models import ConvNP
-from deepsensor.plot.utils import plot_context_encoding, plot_offgrid_context
+from deepsensor.plot import receptive_field, context_encoding, offgrid_context
 
 from sim2real.utils import (
     ensure_dir_exists,
@@ -36,7 +41,17 @@ from sim2real.plots import save_plot
 import cartopy.crs as ccrs
 import cartopy.feature as feature
 
-from sim2real.config import paths, names, data, out, Paths, opt
+from sim2real.config import (
+    DataSpec,
+    OptimSpec,
+    OutputSpec,
+    paths,
+    names,
+    data,
+    out,
+    Paths,
+    opt,
+)
 
 
 class Taskset(Dataset):
@@ -83,7 +98,7 @@ class Taskset(Dataset):
 
 
 def sample_plot(model, task, task_loader):
-    fig = plot_context_encoding(model, task, task_loader)
+    fig = context_encoding(model, task, task_loader)
     plt.show()
 
 
@@ -100,7 +115,7 @@ def context_target_plot(task, data_processor, task_loader):
     ax.add_feature(feature.LAND)
     ax.coastlines(linewidth=0.25)
 
-    plot_offgrid_context(
+    offgrid_context(
         ax,
         task,
         data_processor,
@@ -114,15 +129,19 @@ def context_target_plot(task, data_processor, task_loader):
 
 
 class SimTrainer:
-    def __init__(self, paths: Paths) -> None:
+    def __init__(
+        self,
+        paths: Paths,
+        opt: OptimSpec,
+        out: OutputSpec,
+        data: DataSpec,
+        train: bool = True,
+    ) -> None:
         self.paths = paths
-
-        # TODO: Make data config.
-        self.era5_context_points = (5, 30)
-        self.era5_target_points = 100
-        self.time_freq = "D"
         self.opt = opt
         self.out = out
+        self.data = data
+
         self.exp_dir = exp_dir_sim()
         self.latest_path = f"{utils.weight_dir(self.exp_dir)}/latest.h5"
         self.best_path = f"{utils.weight_dir(self.exp_dir)}/best.h5"
@@ -130,24 +149,34 @@ class SimTrainer:
         [ensure_dir_exists(path) for path in [self.latest_path, self.best_path]]
 
         B.set_global_device(self.opt.device)
-        torch.set_default_device(self.opt.device)
-        # B.cholesky_retry_factor = 1e6
+        # torch.set_default_device(self.opt.device)
+        B.cholesky_retry_factor = 1e8
         # B.epsilon = 1e-5
 
-        self.raw = []
-        self.target = []
         self.context_points = []
         self.target_points = []
 
-        self.era5 = self.add_era5()
-        self.elevation = self.add_elevation()
+        self.era5_raw = self.add_era5()
+        self.aux_raw = self.add_aux()
+        self.raw = [self.era5_raw, self.aux_raw]
 
         self.data_processor = self._init_data_processor()
-        self.processed = self.data_processor(self.raw)
-        self.target = self.data_processor(self.target)
+        self.era5, self.aux = self.data_processor(self.raw)
+        # Add spatiotemporal data.
+        self.aux = self._expand_aux(self.aux)
 
+        self._init_loaders()
+        self._init_model()
+
+        if train:
+            self._init_log()
+
+    def _init_loaders(self):
+        # don't collate as we want a list of tasks,
+        # not any tensors.
+        collate_fn = lambda x: x
         self.task_loader = TaskLoader(
-            context=self.processed, target=self.target, time_freq="H"
+            context=[self.era5, self.aux], target=[self.era5], time_freq="H"
         )
 
         train_set = Taskset(
@@ -181,26 +210,22 @@ class SimTrainer:
             train_set,
             shuffle=True,
             batch_size=self.opt.batch_size,
-            collate_fn=concat_tasks,
+            collate_fn=collate_fn,
         )
 
         self.cv_loader = DataLoader(
             cv_set,
             shuffle=False,
             batch_size=self.opt.batch_size_val,
-            collate_fn=concat_tasks,
+            collate_fn=collate_fn,
         )
 
         self.test_loader = DataLoader(
             test_set,
             shuffle=False,
             batch_size=self.opt.batch_size_val,
-            collate_fn=concat_tasks,
+            collate_fn=collate_fn,
         )
-
-        self._init_model()
-
-        self._init_log()
 
     def _set_seeds(self):
         B.set_random_seed(self.opt.seed)
@@ -222,21 +247,44 @@ class SimTrainer:
 
     def add_era5(self):
         era5 = load_era5()[names.temp]
-        self.raw.append(era5)
-        self.target.append(era5)
-        self.context_points.append(self.era5_context_points)
-        self.target_points.append(self.era5_target_points)
+        self.context_points.append(self.data.era5_context)
+        self.target_points.append(self.data.era5_target)
         return era5
 
-    def add_elevation(self):
-        elevation = load_elevation()
+    def add_aux(self):
+        def _coarsen(high_res, low_res):
+            """
+            Coarsen factor for shrinking something high-res to low-res.
+            """
+            factor = self.data.aux_coarsen_factor * len(high_res) // len(low_res)
+            return int(factor)
+
+        aux = load_elevation()
         coarsen = {
-            names.lat: len(elevation[names.lat]) // len(self.era5[names.lat]),
-            names.lon: len(elevation[names.lon]) // len(self.era5[names.lon]),
+            names.lat: _coarsen(aux[names.lat], self.era5_raw[names.lat]),
+            names.lon: _coarsen(aux[names.lon], self.era5_raw[names.lon]),
         }
-        elevation = elevation.coarsen(coarsen, boundary="trim").mean()
-        self.raw.append(elevation)
+        aux = aux.coarsen(coarsen, boundary="trim").mean()
         self.context_points.append("all")
+        return aux
+
+    def _expand_aux(self, aux):
+        x1x2_ds = construct_x1x2_ds(aux)
+        aux["x1_arr"] = x1x2_ds["x1_arr"]
+        aux["x2_arr"] = x1x2_ds["x2_arr"]
+        times = self.era5_raw[names.time].values
+        dates = pd.date_range(times.min(), times.max(), freq="H")
+
+        # Day of year.
+        doy_ds = construct_circ_time_ds(dates, freq="D")
+        aux["cos_D"] = doy_ds["cos_D"]
+        aux["sin_D"] = doy_ds["sin_D"]
+
+        # Time of day.
+        tod_ds = construct_circ_time_ds(dates, freq="H")
+        aux["cos_H"] = tod_ds["cos_H"]
+        aux["sin_H"] = tod_ds["sin_H"]
+        return aux
 
     def eval_on_batch(self, tasks):
         with torch.no_grad():
@@ -252,7 +300,6 @@ class SimTrainer:
     def evaluate(self):
         batch_losses = []
         for i, task in enumerate(self.cv_loader):
-            task["Y_c"][1].mask = task["Y_c"][1].mask[:, 0:1, :]
             batch_loss = self.eval_on_batch(task)
             batch_losses.append(batch_loss)
         return np.mean(batch_losses)
@@ -266,13 +313,19 @@ class SimTrainer:
             task_losses.append(self.model.loss_fn(task, normalise=True))
         mean_batch_loss = B.mean(torch.stack(task_losses))
         mean_batch_loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.model.model.parameters(), 0.01)
+
+        l = float(mean_batch_loss.detach().cpu().numpy())
+        if l < -5:
+            self.plot_prediction(name=f"loss_{l}", task=task)
         self.optimiser.step()
         return float(mean_batch_loss.detach().cpu().numpy())
 
-    def train(self):
+    def overfit_train(self):
+        """
+        Overfit to just one task to see if the model works.
+        """
         epoch_losses = []
-
-        train_iter = iter(self.train_loader)
 
         self.optimiser = optim.Adam(self.model.model.parameters(), lr=self.opt.lr)
 
@@ -284,7 +337,46 @@ class SimTrainer:
 
         for epoch in self.pbar:
             batch_losses = []
-            for _ in range(self.opt.batches_per_epoch):
+            for i in range(self.opt.batches_per_epoch):
+                date = "2012-01-01"
+                test_date = pd.Timestamp(date)
+                task = self.task_loader(test_date, context_sampling=("all", "all"))
+                if i == 0:
+                    self.plot_prediction(name=f"epoch_{epoch}_test", task=task)
+                try:
+                    batch_loss = self.train_on_batch(task)
+                    if batch_loss < -5:
+                        print(batch_loss)
+                        # self.plot_prediction(name=f"loss_{batch_loss}", task=task)
+                except:
+                    self.plot_prediction(name=f"epoch_{epoch}_test_broken", task=task)
+                    return
+
+                batch_losses.append(batch_loss)
+
+            train_loss = np.mean(batch_losses)
+            epoch_losses.append(train_loss)
+            val_lik = self.evaluate()
+            self._log(epoch, train_loss, val_lik)
+            self._save_weights(epoch, val_lik)
+
+    def train(self):
+        epoch_losses = []
+
+        train_iter = iter(self.train_loader)
+
+        self.optimiser = optim.Adam(self.model.model.parameters(), lr=self.opt.lr)
+        # self.optimiser = optim.SGD(self.model.model.parameters(), lr=self.opt.lr)
+
+        self.pbar = tqdm(range(self.start_epoch, self.opt.num_epochs + 1))
+
+        if self.start_epoch == 1:
+            val_loss = self.evaluate()
+            self._log(0, val_loss, val_loss)
+
+        for epoch in self.pbar:
+            batch_losses = []
+            for i in range(self.opt.batches_per_epoch):
                 # Usually one epoch would be going through the whole dataset.
                 # This is too long for us and we want to monitor more often.
                 # Even though it's a bit hacky we check if we've run out of tasks
@@ -294,7 +386,6 @@ class SimTrainer:
                 except StopIteration:
                     train_iter = iter(self.train_loader)
                     task = next(train_iter)
-                task["Y_c"][1].mask = task["Y_c"][1].mask[:, 0:1, :]
                 batch_loss = self.train_on_batch(task)
                 batch_losses.append(batch_loss)
 
@@ -310,8 +401,22 @@ class SimTrainer:
 
     def _init_model(self):
         # TODO: Custom model
-        model = ConvNP(self.data_processor, self.task_loader)
+
+        # unet_channels = (32,) * 8
+        unet_channels = (64,) * 5
+
+        model = ConvNP(
+            self.data_processor,
+            self.task_loader,
+            likelihood="het",
+            verbose=True,
+            unet_channels=unet_channels,
+        )
         self.best_val_loss = load_weights(None, self.best_path, loss_only=True)[1]
+        self.num_params = sum(
+            p.numel() for p in model.model.parameters() if p.requires_grad
+        )
+        print(f"Model number parameters: {self.num_params}")
 
         if self.opt.start_from == "best":
             (
@@ -377,28 +482,33 @@ class SimTrainer:
                 "data": asdict(data),
                 "model": "inferred",
             }
-            self.wandb = wandb.init(project="climate-sim2real", config=config)
+            self.wandb = wandb.init(
+                project="climate-sim2real", config=config, name=out.wandb_name
+            )
 
     def _log(self, epoch, train_loss, val_loss):
         self.pbar.set_postfix({"train_loss": train_loss, "val_loss": val_loss})
         if self.out.wandb:
-            self.wandb.log({"epoch": epoch, "train_loss": train_loss})
+            self.wandb.log(
+                {"epoch": epoch, "train_loss": train_loss, "val_loss": val_loss}
+            )
 
-    def plot_prediction(self, name=None, date="2022-01-01"):
-        test_date = pd.Timestamp(date)
-        task = self.task_loader(test_date, context_sampling=(30, "all"))
+    def plot_prediction(self, name=None, date="2022-01-01", task=None):
+        if task is None:
+            test_date = pd.Timestamp(date)
+            task = self.task_loader(test_date, context_sampling=(30, "all"))
 
-        mean_ds, std_ds = self.model.predict(task, X_t=self.era5)
+        mean_ds, std_ds = self.model.predict(task, X_t=self.era5_raw)
 
         coord_map = {
-            names.lat: self.era5[names.lat],
-            names.lon: self.era5[names.lon],
+            names.lat: self.era5_raw[names.lat],
+            names.lon: self.era5_raw[names.lon],
         }
 
         # Fix rounding errors along dimensions.
         mean_ds = mean_ds.assign_coords(coord_map)
         std_ds = std_ds.assign_coords(coord_map)
-        err_da = mean_ds[names.temp] - self.era5
+        err_da = mean_ds[names.temp] - self.era5_raw
 
         proj = ccrs.TransverseMercator(central_longitude=10, approx=False)
 
@@ -408,10 +518,19 @@ class SimTrainer:
 
         sel = {names.time: task["time"]}
 
-        self.era5.sel(sel).plot(cmap="seismic", ax=axs[0], transform=ccrs.PlateCarree())
+        era5_plot = self.era5_raw.sel(sel).plot(
+            cmap="seismic", ax=axs[0], transform=ccrs.PlateCarree()
+        )
+        cbar = era5_plot.colorbar
+        vmin, vmax = cbar.vmin, cbar.vmax
+
         axs[0].set_title("ERA5")
         mean_ds[names.temp].sel(sel).plot(
-            cmap="seismic", ax=axs[1], transform=ccrs.PlateCarree()
+            cmap="seismic",
+            ax=axs[1],
+            transform=ccrs.PlateCarree(),
+            vmin=vmin,
+            vmax=vmax,
         )
         axs[1].set_title("ConvNP mean")
         std_ds[names.temp].sel(sel).plot(
@@ -420,7 +539,7 @@ class SimTrainer:
         axs[2].set_title("ConvNP std dev")
         err_da.sel(sel).plot(cmap="seismic", ax=axs[3], transform=ccrs.PlateCarree())
         axs[3].set_title("ConvNP error")
-        plot_offgrid_context(
+        offgrid_context(
             axs,
             task,
             self.data_processor,
@@ -446,7 +565,52 @@ class SimTrainer:
         plt.clf()
 
 
-s = SimTrainer(paths)
-s.train()
-
+s = SimTrainer(paths, opt, out, data, train=False)
+# %%
+# s.train()
 # s.plot_prediction()
+receptive_field(
+    s.model.model.receptive_field,
+    s.data_processor,
+    ccrs.PlateCarree(),
+    [*data.bounds.lon, *data.bounds.lat],
+)
+
+plt.gca().set_global()
+# %%
+s.model.model.receptive_field
+# %%
+
+receptive_field = s.model.model.receptive_field
+data_processor = s.data_processor
+crs = ccrs.PlateCarree()
+extent = [*data.bounds.lon, *data.bounds.lat]
+
+# %%
+
+
+fig, ax = plt.subplots(subplot_kw=dict(projection=crs))
+ax.set_extent(extent, crs=crs)
+ax.coastlines(linewidth=0.25)
+ax.add_feature(feature.BORDERS, linewidth=0.25)
+# %%
+# %%
+x1_rf_raw, x2_rf_raw = data_processor.map_x1_and_x2(
+    receptive_field, receptive_field, unnorm=True
+)
+rect = [x1_rf_raw, x2_rf_raw]
+ax.add_patch(
+    mpatches.Rectangle(
+        xy=[0, 0],
+        width=rect[1],
+        height=rect[0],
+        facecolor="black",
+        alpha=0.3,
+        transform=crs,
+    )
+)
+ax.coastlines()
+ax.text(0, 0, f"{rect[1]:.2f} x {rect[0]:.2f}", fontsize=6)
+
+# %%
+s.model.model.receptive_field
