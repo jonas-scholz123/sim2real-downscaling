@@ -37,6 +37,16 @@ class DataSpec:
 
 
 @dataclass
+class ModelSpec:
+    unet_channels: Tuple
+    film: bool
+    freeze_film: bool
+    likelihood: str
+    encoder_scales_learnable: bool
+    decoder_scale_learnable: bool
+
+
+@dataclass
 class Names:
     """
     Consistent names in e.g. dataframes.
@@ -118,9 +128,18 @@ opt = OptimSpec(
     batch_size=16,
     batch_size_val=128,
     batches_per_epoch=50,
-    num_epochs=250,
-    lr=3e-3,
-    start_from=None,  # None, "best", "latest"
+    num_epochs=300,
+    lr=3e-4,
+    start_from="best",  # None, "best", "latest"
 )
 
-out = OutputSpec(wandb=True, plots=True, wandb_name="deeper and thinner")
+model = ModelSpec(
+    unet_channels=(32,) * 8,
+    film=False,
+    freeze_film=True,
+    likelihood="het",
+    encoder_scales_learnable=True,
+    decoder_scale_learnable=True,
+)
+
+out = OutputSpec(wandb=True, plots=True, wandb_name="encoder learnable")

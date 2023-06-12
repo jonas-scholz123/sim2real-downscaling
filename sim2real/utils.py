@@ -1,6 +1,6 @@
 import os
 import torch
-from sim2real.config import paths
+from sim2real.config import paths, ModelSpec
 import numpy as np
 
 
@@ -12,9 +12,11 @@ def ensure_exists(dirpath):
     os.makedirs(dirpath, exist_ok=True)
 
 
-def exp_dir_sim():
-    # TODO: add model spec into path.
-    path = f"{paths.out}/modelspec/sim"
+def exp_dir_sim(m: ModelSpec):
+    channel_str = str(m.unet_channels)[1:-1].replace(", ", "_")
+    if m.film:
+        channel_str += "film"
+    path = f"{paths.out}/{m.likelihood}/{channel_str}/sim"
     ensure_exists(path)
     return path
 

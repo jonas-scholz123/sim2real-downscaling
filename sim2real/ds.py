@@ -53,6 +53,8 @@ from sim2real.config import (
     opt,
 )
 
+import sim2real.config as cfg
+
 
 class Taskset(Dataset):
     def __init__(
@@ -142,7 +144,7 @@ class SimTrainer:
         self.out = out
         self.data = data
 
-        self.exp_dir = exp_dir_sim()
+        self.exp_dir = exp_dir_sim(cfg.model)
         self.latest_path = f"{utils.weight_dir(self.exp_dir)}/latest.h5"
         self.best_path = f"{utils.weight_dir(self.exp_dir)}/best.h5"
 
@@ -402,15 +404,14 @@ class SimTrainer:
     def _init_model(self):
         # TODO: Custom model
 
-        # unet_channels = (32,) * 8
-        unet_channels = (64,) * 5
-
         model = ConvNP(
             self.data_processor,
             self.task_loader,
-            likelihood="het",
-            verbose=True,
-            unet_channels=unet_channels,
+            verbose=False,
+            likelihood=cfg.model.likelihood,
+            unet_channels=cfg.model.unet_channels,
+            encoder_scales_learnable=cfg.model.encoder_scales_learnable,
+            decoder_scale_learnable=cfg.model.decoder_scale_learnable,
         )
         self.best_val_loss = load_weights(None, self.best_path, loss_only=True)[1]
         self.num_params = sum(
@@ -480,7 +481,7 @@ class SimTrainer:
             config = {
                 "opt": asdict(opt),
                 "data": asdict(data),
-                "model": "inferred",
+                "model": asdict(cfg.model),
             }
             self.wandb = wandb.init(
                 project="climate-sim2real", config=config, name=out.wandb_name
@@ -492,6 +493,16 @@ class SimTrainer:
             self.wandb.log(
                 {"epoch": epoch, "train_loss": train_loss, "val_loss": val_loss}
             )
+
+    def plot_receptive_field(self):
+        receptive_field(
+            self.model.model.receptive_field,
+            self.data_processor,
+            ccrs.PlateCarree(),
+            [*data.bounds.lon, *data.bounds.lat],
+        )
+
+        plt.gca().set_global()
 
     def plot_prediction(self, name=None, date="2022-01-01", task=None):
         if task is None:
@@ -565,52 +576,5 @@ class SimTrainer:
         plt.clf()
 
 
-s = SimTrainer(paths, opt, out, data, train=False)
-# %%
-# s.train()
-# s.plot_prediction()
-receptive_field(
-    s.model.model.receptive_field,
-    s.data_processor,
-    ccrs.PlateCarree(),
-    [*data.bounds.lon, *data.bounds.lat],
-)
-
-plt.gca().set_global()
-# %%
-s.model.model.receptive_field
-# %%
-
-receptive_field = s.model.model.receptive_field
-data_processor = s.data_processor
-crs = ccrs.PlateCarree()
-extent = [*data.bounds.lon, *data.bounds.lat]
-
-# %%
-
-
-fig, ax = plt.subplots(subplot_kw=dict(projection=crs))
-ax.set_extent(extent, crs=crs)
-ax.coastlines(linewidth=0.25)
-ax.add_feature(feature.BORDERS, linewidth=0.25)
-# %%
-# %%
-x1_rf_raw, x2_rf_raw = data_processor.map_x1_and_x2(
-    receptive_field, receptive_field, unnorm=True
-)
-rect = [x1_rf_raw, x2_rf_raw]
-ax.add_patch(
-    mpatches.Rectangle(
-        xy=[0, 0],
-        width=rect[1],
-        height=rect[0],
-        facecolor="black",
-        alpha=0.3,
-        transform=crs,
-    )
-)
-ax.coastlines()
-ax.text(0, 0, f"{rect[1]:.2f} x {rect[0]:.2f}", fontsize=6)
-
-# %%
-s.model.model.receptive_field
+s = SimTrainer(paths, opt, out, data, train=True)
+s.train()

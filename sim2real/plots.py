@@ -143,5 +143,4 @@ if __name__ == "__main__":
         ax.coastlines(linewidth=0.25)
 
     axs[1].set_title("")
-    axs[1].set_ylabel("aaa")
     save_plot(None, "real_and_era_5")
