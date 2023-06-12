@@ -153,7 +153,7 @@ class SimTrainer:
         B.set_global_device(self.opt.device)
         # torch.set_default_device(self.opt.device)
         B.cholesky_retry_factor = 1e8
-        # B.epsilon = 1e-5
+        B.epsilon = 1e-12
 
         self.context_points = []
         self.target_points = []
@@ -319,9 +319,10 @@ class SimTrainer:
 
         l = float(mean_batch_loss.detach().cpu().numpy())
         if l < -5:
+            print("Bad loss!")
             self.plot_prediction(name=f"loss_{l}", task=task)
         self.optimiser.step()
-        return float(mean_batch_loss.detach().cpu().numpy())
+        return l
 
     def overfit_train(self):
         """
@@ -347,9 +348,6 @@ class SimTrainer:
                     self.plot_prediction(name=f"epoch_{epoch}_test", task=task)
                 try:
                     batch_loss = self.train_on_batch(task)
-                    if batch_loss < -5:
-                        print(batch_loss)
-                        # self.plot_prediction(name=f"loss_{batch_loss}", task=task)
                 except:
                     self.plot_prediction(name=f"epoch_{epoch}_test_broken", task=task)
                     return
@@ -418,6 +416,7 @@ class SimTrainer:
             p.numel() for p in model.model.parameters() if p.requires_grad
         )
         print(f"Model number parameters: {self.num_params}")
+        print(f"Model receptive field (fraction): {model.model.receptive_field}")
 
         if self.opt.start_from == "best":
             (

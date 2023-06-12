@@ -130,16 +130,16 @@ opt = OptimSpec(
     batches_per_epoch=50,
     num_epochs=300,
     lr=3e-4,
-    start_from="best",  # None, "best", "latest"
+    start_from=None,  # None, "best", "latest"
 )
 
 model = ModelSpec(
-    unet_channels=(32,) * 8,
+    unet_channels=(128,) * 3,
     film=False,
     freeze_film=True,
     likelihood="het",
-    encoder_scales_learnable=True,
-    decoder_scale_learnable=True,
+    encoder_scales_learnable=False,
+    decoder_scale_learnable=False,
 )
 
-out = OutputSpec(wandb=True, plots=True, wandb_name="encoder learnable")
+out = OutputSpec(wandb=True, plots=True, wandb_name=None)
