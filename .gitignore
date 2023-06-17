@@ -1,4 +1,4 @@
-sim2real/secrets.py
+sim2real/keys.py
 data/
 .vscode
 outputs/

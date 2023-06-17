@@ -35,7 +35,7 @@ from sim2real.utils import (
     save_model,
     load_weights,
 )
-from sim2real import utils, secrets
+from sim2real import keys, utils
 from sim2real.datasets import load_elevation, load_era5
 from sim2real.plots import save_plot
 import cartopy.crs as ccrs
@@ -478,7 +478,7 @@ class SimTrainer:
     def _init_log(self):
         if self.out.wandb:
             # Set this in case we're running on HPC where we can't run login command.
-            os.environ["WANDB_API_KEY"] = secrets.WANDB_API_KEY
+            os.environ["WANDB_API_KEY"] = keys.WANDB_API_KEY
             config = {
                 "opt": asdict(opt),
                 "data": asdict(data),
