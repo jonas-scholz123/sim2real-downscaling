@@ -209,12 +209,18 @@ class SimTrainer:
             deterministic=True,
         )
 
+        if self.opt.device == "cuda":
+            gen = torch.Generator(device=self.opt.device)
+        else:
+            gen = torch.Generator()
+
         # Don't turn into pytorch tensors. We just want the sampling functionality.
         self.train_loader = DataLoader(
             train_set,
             shuffle=True,
             batch_size=self.opt.batch_size,
             collate_fn=collate_fn,
+            generator=gen,
         )
 
         self.cv_loader = DataLoader(
@@ -222,6 +228,7 @@ class SimTrainer:
             shuffle=False,
             batch_size=self.opt.batch_size_val,
             collate_fn=collate_fn,
+            generator=gen,
         )
 
         self.test_loader = DataLoader(
@@ -229,6 +236,7 @@ class SimTrainer:
             shuffle=False,
             batch_size=self.opt.batch_size_val,
             collate_fn=collate_fn,
+            generator=gen,
         )
 
     def _set_seeds(self):
