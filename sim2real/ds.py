@@ -151,7 +151,9 @@ class SimTrainer:
         [ensure_dir_exists(path) for path in [self.latest_path, self.best_path]]
 
         B.set_global_device(self.opt.device)
-        # torch.set_default_device(self.opt.device)
+        if self.opt.device == "cuda":
+            # Can't do this with MPS (need to change the deepsensor __init__ file).
+            torch.set_default_device(self.opt.device)
         B.cholesky_retry_factor = 1e8
         B.epsilon = 1e-12
 
