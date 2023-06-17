@@ -1,6 +1,6 @@
 import os
 import torch
-from sim2real.config import paths, ModelSpec
+from sim2real.config import paths, ModelSpec, opt
 import numpy as np
 
 
@@ -45,7 +45,7 @@ def save_model(
 
 def load_weights(model, path, loss_only=False):
     try:
-        state = torch.load(path)
+        state = torch.load(path, map_location=opt.device)
         val_loss = state["objective"]
         if loss_only:
             return None, val_loss, None

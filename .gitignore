@@ -5,6 +5,7 @@ outputs/
 deepsensor/
 _outputs/
 wandb/
+*nfs000*
 
 suggestions.txt
 
