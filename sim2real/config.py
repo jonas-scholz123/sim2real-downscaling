@@ -124,7 +124,7 @@ data = DataSpec(
 
 opt = OptimSpec(
     seed=42,
-    device="mps",
+    device="cpu",
     batch_size=16,
     batch_size_val=128,
     batches_per_epoch=50,

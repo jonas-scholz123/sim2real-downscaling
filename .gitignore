@@ -1,4 +1,5 @@
 data/
+*secrets.py
 .vscode
 outputs/
 *.DS_Store
