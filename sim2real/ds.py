@@ -499,10 +499,21 @@ class SimTrainer:
             )
 
     def _log(self, epoch, train_loss, val_loss):
-        self.pbar.set_postfix({"train_loss": train_loss, "val_loss": val_loss})
+        self.pbar.set_postfix(
+            {
+                "train_loss": train_loss,
+                "val_loss": val_loss,
+                "best_val_loss": self.best_val_loss,
+            }
+        )
         if self.out.wandb:
             self.wandb.log(
-                {"epoch": epoch, "train_loss": train_loss, "val_loss": val_loss}
+                {
+                    "epoch": epoch,
+                    "train_loss": train_loss,
+                    "val_loss": val_loss,
+                    "best_val_loss": self.best_val_loss,
+                }
             )
 
     def plot_receptive_field(self):
