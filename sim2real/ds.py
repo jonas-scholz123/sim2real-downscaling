@@ -449,10 +449,10 @@ class SimTrainer:
             torch_state, numpy_state = None, None
 
         # Return RNG for seamless continuation.
-        if torch_state is not None:
-            torch.set_rng_state(torch_state)
-        if numpy_state is not None:
-            np.random.set_state(numpy_state)
+        # if torch_state is not None:
+        #     torch.set_rng_state(torch_state)
+        # if numpy_state is not None:
+        #     np.random.set_state(numpy_state)
 
         # Start one epoch after where the last run started.
         self.start_epoch += 1
