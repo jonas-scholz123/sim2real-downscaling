@@ -104,7 +104,6 @@ if __name__ == "__main__":
     gdf = dwd_sd.at_datetime(datetime)
     import cartopy.crs as ccrs
     import cartopy.feature as feature
-    from deepsensor.plot.utils import plot_context_encoding, plot_offgrid_context
 
     vmin = 4
     vmax = 18
@@ -115,7 +114,7 @@ if __name__ == "__main__":
     )
     bounds = [*data.bounds.lon, *data.bounds.lat]
 
-    gdf = gdf.sample(frac=0.1, random_state=4)
+    gdf = gdf.sample(frac=1, random_state=4)
 
     gdf.crs = proj
 

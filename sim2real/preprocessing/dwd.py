@@ -645,10 +645,14 @@ def process_value_stations():
 
     # Strip whitespace:
     df[names.station_name] = df[names.station_name].str.strip()
+
+    geometry = gpd.points_from_xy(df[names.lon], df[names.lat])
+    df = gpd.GeoDataFrame(df, geometry=geometry)
+    df.crs = data.crs_str
     df.to_feather(paths.dwd_test_stations)
 
 
 if __name__ == "__main__":
-    download_dwd()
-    process_dwd()
+    # download_dwd()
+    # process_dwd()
     process_value_stations()

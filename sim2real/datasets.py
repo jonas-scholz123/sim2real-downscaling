@@ -1,4 +1,5 @@
 # %%
+from typing import Tuple
 import pandas as pd
 import os
 import matplotlib.pyplot as plt
@@ -16,8 +17,6 @@ import numpy as np
 from sim2real.config import Paths, paths, names, data
 from sim2real.gridder import Gridder
 from sim2real.utils import ensure_dir_exists
-
-# %%
 
 
 class QualityCode(Enum):
@@ -115,8 +114,11 @@ class ECADStationData:
 
 
 class DWDSTationData:
-    def __init__(self, paths: Paths) -> None:
-        self.df, self.meta_df = self._load_data(paths)
+    def __init__(self, paths: Paths, df=None, meta_df=None) -> None:
+        if df is None or meta_df is None:
+            self.df, self.meta_df = self._load_data(paths)
+        else:
+            self.df, self.meta_df = df, meta_df
 
     def _load_data(self, paths: Paths):
         try:
@@ -138,6 +140,42 @@ class DWDSTationData:
         gdf = gpd.GeoDataFrame(df)
         gdf.crs = data.crs_str
         return gdf
+
+    def train_val_test_split(self, val_frac=0.2, seed=42) -> Tuple:
+        v = gpd.read_feather(paths.dwd_test_stations)
+
+        # Choose nearest stations to VALUE test stations.
+        test_station_ids = set(v.sjoin_nearest(self.meta_df)[names.station_id])
+        query = f"{names.station_id} in @test_station_ids"
+        test_df = self.df.query(query)
+        test_meta_df = self.meta_df.query(query)
+
+        # remainder:
+        np.random.seed(seed)
+        meta_remainder = self.meta_df.query(
+            f"{names.station_id} not in @test_station_ids"
+        )
+
+        station_ids = meta_remainder["STATION_ID"].unique()
+        val_station_ids = np.random.choice(
+            station_ids, int(val_frac * len(station_ids))
+        )
+
+        val_df = self.df.query(f"{names.station_id} in @val_station_ids")
+        val_meta_df = meta_remainder.query(f"{names.station_id} in @val_station_ids")
+
+        train_station_ids = set(station_ids) - set(val_station_ids)
+        train_df = self.df.query(f"{names.station_id} in @train_station_ids")
+
+        train_meta_df = meta_remainder.query(
+            f"{names.station_id} in @train_station_ids"
+        )
+
+        train = DWDSTationData(None, train_df, train_meta_df)
+        val = DWDSTationData(None, val_df, val_meta_df)
+        test = DWDSTationData(None, test_df, test_meta_df)
+
+        return train, val, test
 
     def at_datetime(self, dt):
         dt = pd.to_datetime(dt)
@@ -190,5 +228,5 @@ def load_elevation():
 
 if __name__ == "__main__":
     dwd_sd = DWDSTationData(paths)
-
-# %%
+    test_stations = pd.read_feather(paths.dwd_test_stations)[names.station_name]
+    train, val, test = dwd_sd.train_val_test_split()
