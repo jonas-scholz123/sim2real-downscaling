@@ -9,6 +9,7 @@ class Paths:
     raw_dwd: str
     dwd: str
     dwd_meta: str
+    dwd_test_stations: str
     raw_era5: str
     era5: str
     raw_srtm: str
@@ -97,6 +98,7 @@ paths = Paths(
     raw_dwd=f"{root}/data/raw/dwd/airtemp2m/unzipped",
     dwd=f"{root}/data/processed/dwd/airtemp2m/dwd.feather",
     dwd_meta=f"{root}/data/processed/dwd/airtemp2m/dwd_meta.feather",
+    dwd_test_stations=f"{root}/data/processed/dwd/value_stations.feather",
     raw_era5=f"{root}/data/raw/ERA_5_Germany/1.grib",
     era5=f"{root}/data/processed/era5/era5_small.nc",
     raw_srtm=f"{root}/data/raw/srtm_dem/srtm_germany_dtm.tif",

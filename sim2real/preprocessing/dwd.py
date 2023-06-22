@@ -629,6 +629,26 @@ def process_dwd():
     meta_df.to_feather(paths.dwd_meta)
 
 
+def process_value_stations():
+    df = pd.read_csv(f"{paths.root}/data/raw/dwd/value_stations.txt")
+    df.columns = [
+        names.station_id,
+        names.station_name,
+        names.lon,
+        names.lat,
+        names.height,
+        "source",
+    ]
+
+    # StationID does not match with DWD dataset.
+    df = df.drop([names.station_id, "source"], axis=1)
+
+    # Strip whitespace:
+    df[names.station_name] = df[names.station_name].str.strip()
+    df.to_feather(paths.dwd_test_stations)
+
+
 if __name__ == "__main__":
     download_dwd()
     process_dwd()
+    process_value_stations()
