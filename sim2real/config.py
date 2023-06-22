@@ -134,8 +134,8 @@ opt = OptimSpec(
 )
 
 model = ModelSpec(
-    unet_channels=(128,) * 3,
-    film=False,
+    unet_channels=(128,) * 4,
+    film=True,
     freeze_film=True,
     likelihood="het",
     encoder_scales_learnable=False,

@@ -38,6 +38,7 @@ from sim2real.utils import (
 from sim2real import keys, utils
 from sim2real.datasets import load_elevation, load_era5
 from sim2real.plots import save_plot
+from sim2real.modules import convcnp
 import cartopy.crs as ccrs
 import cartopy.feature as feature
 
@@ -410,17 +411,18 @@ class SimTrainer:
                     self.plot_prediction(name=f"epoch_{epoch}_{date}", date=date)
 
     def _init_model(self):
-        # TODO: Custom model
-
-        model = ConvNP(
-            self.data_processor,
+        # Construct custom model.
+        model = convcnp.from_taskloader(
             self.task_loader,
-            verbose=False,
             likelihood=cfg.model.likelihood,
             unet_channels=cfg.model.unet_channels,
             encoder_scales_learnable=cfg.model.encoder_scales_learnable,
             decoder_scale_learnable=cfg.model.decoder_scale_learnable,
+            film=cfg.model.film,
+            freeze_film=cfg.model.freeze_film,
         )
+
+        model = ConvNP(self.data_processor, self.task_loader, model)
         self.best_val_loss = load_weights(None, self.best_path, loss_only=True)[1]
         self.num_params = sum(
             p.numel() for p in model.model.parameters() if p.requires_grad
