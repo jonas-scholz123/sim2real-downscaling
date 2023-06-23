@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from typing import Tuple
 from pathlib import Path
+import cartopy.crs as ccrs
 
 
 @dataclass
@@ -66,6 +67,8 @@ class Names:
 class OutputSpec:
     wandb: bool
     plots: bool
+    fig_crs: ccrs._CylindricalProjection
+    data_crs: ccrs._CylindricalProjection
     wandb_name: str = None
 
 
@@ -144,4 +147,10 @@ model = ModelSpec(
     decoder_scale_learnable=False,
 )
 
-out = OutputSpec(wandb=True, plots=True, wandb_name=None)
+out = OutputSpec(
+    wandb=True,
+    plots=True,
+    wandb_name=None,
+    fig_crs=ccrs.TransverseMercator(central_longitude=10, approx=False),
+    data_crs=ccrs.PlateCarree(),
+)

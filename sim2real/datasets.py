@@ -16,7 +16,6 @@ import numpy as np
 
 from sim2real.config import Paths, paths, names, data
 from sim2real.gridder import Gridder
-from sim2real.utils import ensure_dir_exists
 
 
 class QualityCode(Enum):
@@ -214,6 +213,24 @@ class DWDSTationData:
     def apply_grid(self, gridder: Gridder):
         self.meta_df = gridder.grid_latlons(self.meta_df)
 
+    def full(self):
+        """
+        Return a dataframe with all of the data.
+        """
+        dts = self.df.index.get_level_values(0)
+        min_dt, max_dt = dts.min(), dts.max()
+        return self.between_datetimes(min_dt, max_dt)
+
+    def to_deepsensor_df(self):
+        """
+        Returns a dataframe indexed by [time, lat, lon] with only the temperature column T2M.
+        """
+        df = self.full()
+        print(df)
+        return df.reset_index().set_index([names.time, names.lat, names.lon])[
+            [names.temp]
+        ]
+
 
 def load_era5():
     if paths.era5.endswith("nc"):
@@ -224,9 +241,3 @@ def load_era5():
 
 def load_elevation():
     return xr.load_dataset(paths.srtm)
-
-
-if __name__ == "__main__":
-    dwd_sd = DWDSTationData(paths)
-    test_stations = pd.read_feather(paths.dwd_test_stations)[names.station_name]
-    train, val, test = dwd_sd.train_val_test_split()

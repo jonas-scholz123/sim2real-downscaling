@@ -2,10 +2,13 @@
 from sim2real.datasets import DWDSTationData, ECADStationData, load_era5
 from sim2real.utils import ensure_dir_exists
 import xarray as xr
+import numpy as np
 
 import matplotlib.pyplot as plt
 import pandas as pd
 import geopandas as gpd
+import cartopy.crs as ccrs
+import cartopy.feature as feature
 from sim2real.config import paths, names, data
 
 
@@ -94,7 +97,26 @@ def plot_geopandas(
     return fig, ax
 
 
+def init_fig(nrows=1, ncols=1, figsize=(4, 4)):
+    """
+    Generate a figure configured with a basic map of germany.
+    """
+    proj = ccrs.TransverseMercator(central_longitude=10, approx=False)
+    fig, axs = plt.subplots(
+        subplot_kw={"projection": proj}, nrows=nrows, ncols=ncols, figsize=figsize
+    )
+    bounds = [*data.bounds.lon, *data.bounds.lat]
+
+    for ax in np.array(axs).flat:
+        ax.set_extent(bounds, crs=ccrs.PlateCarree())
+        ax.add_feature(feature.BORDERS, linewidth=0.25)
+        ax.coastlines(linewidth=0.25)
+
+    return fig, axs
+
+
 if __name__ == "__main__":
+    init_fig()
     from sim2real.config import paths
 
     dwd_sd = DWDSTationData(paths)
@@ -102,8 +124,6 @@ if __name__ == "__main__":
 
     datetime = "2022-04-25 14:00:00"
     gdf = dwd_sd.at_datetime(datetime)
-    import cartopy.crs as ccrs
-    import cartopy.feature as feature
 
     vmin = 4
     vmax = 18
@@ -136,7 +156,7 @@ if __name__ == "__main__":
         ax=axs[1], transform=ccrs.PlateCarree(), cmap="seismic", vmin=vmin, vmax=vmax
     )
 
-    for ax in axs:
+    for ax in axs.flat():
         ax.set_extent(bounds, crs=ccrs.PlateCarree())
         ax.add_feature(feature.BORDERS, linewidth=0.25)
         ax.coastlines(linewidth=0.25)
