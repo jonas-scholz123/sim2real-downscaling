@@ -1,4 +1,6 @@
-# %%
+from abc import ABC, abstractmethod
+from config import OptimSpec, OutputSpec, DataSpec, Paths, ModelSpec
+
 import os
 import random
 import wandb
@@ -39,105 +41,21 @@ from sim2real import keys, utils
 from sim2real.datasets import load_elevation, load_era5
 from sim2real.plots import save_plot
 from sim2real.modules import convcnp
+from sim2real.train.taskset import Taskset
 import cartopy.crs as ccrs
 import cartopy.feature as feature
-
-from sim2real.config import (
-    DataSpec,
-    OptimSpec,
-    OutputSpec,
-    paths,
-    names,
-    data,
-    out,
-    Paths,
-    opt,
-)
 
 import sim2real.config as cfg
 
 
-class Taskset(Dataset):
-    def __init__(
-        self,
-        time_range: Tuple[str, str],
-        taskloader: TaskLoader,
-        num_context,
-        num_target,
-        freq="H",
-        deterministic=False,
-    ) -> None:
-        self.dates = pd.date_range(*time_range, freq=freq)
-        self.num_context, self.num_target = num_context, num_target
-        self.task_loader = taskloader
-        self.deterministic = deterministic
-        self.rng = np.random.default_rng(opt.seed + 1)
-
-    def _map_num_context(self, num_context):
-        """
-        Map num_context specs to something understandable by TaskLoader.
-        """
-        if isinstance(num_context, list):
-            return [self._map_num_context(el) for el in num_context]
-        elif isinstance(num_context, tuple):
-            return int(self.rng.integers(*num_context))
-        else:
-            return num_context
-
-    def __len__(self):
-        return len(self.dates)
-
-    def __getitem__(self, idx):
-        if idx == len(self) - 1 and self.deterministic:
-            # Reset rng for deterministic
-            self.rng = np.random.default_rng(opt.seed + 1)
-        # Random number of context observations
-        num_context = self._map_num_context(self.num_context)
-        date = self.dates[idx]
-        task = self.task_loader(
-            date, num_context, self.num_target, deterministic=self.deterministic
-        )
-        return task
-
-
-def sample_plot(model, task, task_loader):
-    fig = context_encoding(model, task, task_loader)
-    plt.show()
-
-
-def context_target_plot(task, data_processor, task_loader):
-    fig = plt.figure(figsize=(6, 6))
-    ax = plt.axes(projection=ccrs.TransverseMercator(central_longitude=10))
-    bounds = [*data.bounds.lon, *data.bounds.lat]
-    ax.set_extent(bounds, crs=ccrs.PlateCarree())
-
-    ax.add_feature(feature.BORDERS, linewidth=0.25)
-    ax.add_feature(feature.LAKES, linewidth=0.25)
-    ax.add_feature(feature.RIVERS, linewidth=0.25)
-    ax.add_feature(feature.OCEAN)
-    ax.add_feature(feature.LAND)
-    ax.coastlines(linewidth=0.25)
-
-    offgrid_context(
-        ax,
-        task,
-        data_processor,
-        task_loader,
-        plot_target=True,
-        add_legend=True,
-        linewidths=0.5,
-        transform=ccrs.PlateCarree(),
-    )
-    plt.show()
-
-
-class SimTrainer:
+class Trainer(ABC):
     def __init__(
         self,
         paths: Paths,
         opt: OptimSpec,
         out: OutputSpec,
         data: DataSpec,
+        mcfg: ModelSpec,
         train: bool = True,
     ) -> None:
         self.paths = paths
@@ -598,7 +516,3 @@ class SimTrainer:
 
         plt.close()
         plt.clf()
-
-
-s = SimTrainer(paths, opt, out, data, train=True)
-s.train()

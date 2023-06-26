@@ -49,4 +49,7 @@ if __name__ == "__main__":
     )
     plt.show()
     # %%
-    task
+
+    from sim2real.train.ds import Taskset
+
+    Taskset(("2022-01-01", "2023-01-01"))
