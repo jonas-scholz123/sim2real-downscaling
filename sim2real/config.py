@@ -148,7 +148,7 @@ model = ModelSpec(
 )
 
 out = OutputSpec(
-    wandb=True,
+    wandb=False,
     plots=True,
     wandb_name=None,
     fig_crs=ccrs.TransverseMercator(central_longitude=10, approx=False),

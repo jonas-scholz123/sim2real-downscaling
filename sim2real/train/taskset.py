@@ -1,7 +1,7 @@
 import pandas as pd
 from torch.utils.data import Dataset
 import numpy as np
-from typing import Tuple
+from typing import Iterable, Tuple
 import deepsensor.torch
 from deepsensor.data.loader import TaskLoader
 
@@ -16,15 +16,22 @@ class Taskset(Dataset):
 
     def __init__(
         self,
-        time_range: Tuple[str, str],
         taskloader: TaskLoader,
         num_context,
         num_target,
         opt: OptimSpec,
+        datetimes: Iterable[pd.Timestamp] = None,
+        time_range: Tuple[str, str] = None,
         freq="H",
         deterministic=False,
     ) -> None:
-        self.dates = pd.date_range(*time_range, freq=freq)
+        """
+        Must define either datetimes or time_range & freq.
+        """
+        if datetimes:
+            self.times = list(datetimes)
+        else:
+            self.times = list(pd.date_range(*time_range, freq=freq))
         self.num_context, self.num_target = num_context, num_target
         self.task_loader = taskloader
         self.deterministic = deterministic
@@ -43,7 +50,7 @@ class Taskset(Dataset):
             return num_context
 
     def __len__(self):
-        return len(self.dates)
+        return len(self.times)
 
     def __getitem__(self, idx):
         if idx == len(self) - 1 and self.deterministic:
@@ -51,7 +58,7 @@ class Taskset(Dataset):
             self.rng = np.random.default_rng(self.seed)
         # Random number of context observations
         num_context = self._map_num_context(self.num_context)
-        date = self.dates[idx]
+        date = self.times[idx]
         task = self.task_loader(
             date, num_context, self.num_target, deterministic=self.deterministic
         )

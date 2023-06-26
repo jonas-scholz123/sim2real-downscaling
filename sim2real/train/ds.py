@@ -132,55 +132,48 @@ class SimTrainer:
         # Add spatiotemporal data.
         self.aux = self._expand_aux(self.aux)
 
-        self._init_loaders()
+        self._init_dataloaders()
         self._init_model()
 
         if train:
             self._init_log()
 
-    def _init_loaders(self):
-        # don't collate as we want a list of tasks,
-        # not any tensors.
-        collate_fn = lambda x: x
-        self.task_loader = TaskLoader(
-            context=[self.era5, self.aux], target=[self.era5], time_freq="H"
-        )
+    def _init_taskloaders(self) -> Tuple[TaskLoader, TaskLoader, TaskLoader]:
+        """
+        Returns: (TaskLoader, TaskLoader, TaskLoader) representing
+            (train, val, test) task loaders.
+        """
+        context, target = [self.era5, self.aux], [self.era5]
+        tl = TaskLoader(context, target, time_freq="H")
+        self.task_loader = tl
 
-        train_set = Taskset(
-            self.data.train_dates,
-            self.task_loader,
-            self.context_points,
-            self.target_points,
-            self.opt,
-            deterministic=False,
-        )
+        def taskset(dates, freq, deterministic):
+            return Taskset(
+                tl,
+                self.context_points,
+                self.target_points,
+                self.opt,
+                dates,
+                freq,
+                deterministic=deterministic,
+            )
 
-        cv_set = Taskset(
-            self.data.cv_dates,
-            self.task_loader,
-            self.context_points,
-            self.target_points,
-            self.opt,
-            self.data.val_freq,
-            deterministic=True,
-        )
+        train_set = taskset(self.data.train_dates, "H", False)
+        val_set = taskset(self.data.train_dates, self.data.val_freq, True)
+        test_set = taskset(self.data.train_dates, self.data.val_freq, True)
 
-        test_set = Taskset(
-            self.data.test_dates,
-            self.task_loader,
-            self.context_points,
-            self.target_points,
-            self.opt,
-            self.data.val_freq,
-            deterministic=True,
-        )
+        return train_set, val_set, test_set
+
+    def _init_dataloaders(self):
+        train_set, cv_set, test_set = self._init_taskloaders()
 
         if self.opt.device == "cuda":
-            gen = torch.Generator(device=self.opt.device)
+            gen = torch.Generator(device="cuda")
         else:
             gen = torch.Generator()
 
         # Don't turn into pytorch tensors. We just want the sampling functionality.
+        collate_fn = lambda x: x
         self.train_loader = DataLoader(
             train_set,
             shuffle=True,
@@ -567,3 +560,5 @@ class SimTrainer:
 
 s = SimTrainer(paths, opt, out, data, model, train=True)
 s.train()
+# %%
+s.era5_raw

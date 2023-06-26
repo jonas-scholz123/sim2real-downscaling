@@ -1,8 +1,6 @@
-from abc import ABC, abstractmethod
-from config import OptimSpec, OutputSpec, DataSpec, Paths, ModelSpec
-
 import os
 import random
+from typing import Tuple
 import wandb
 import xarray as xr
 import pandas as pd
@@ -10,11 +8,10 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import torch.optim as optim
 import torch
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import DataLoader
 import lab as B
 from tqdm import tqdm
 import numpy as np
-from typing import Iterable, Tuple
 from dataclasses import asdict
 
 
@@ -28,7 +25,7 @@ from deepsensor.data.utils import (
 from deepsensor.data.processor import DataProcessor
 from deepsensor.data.loader import TaskLoader
 from deepsensor.model.models import ConvNP
-from deepsensor.plot import receptive_field, context_encoding, offgrid_context
+from deepsensor.plot import receptive_field, offgrid_context
 
 from sim2real.utils import (
     ensure_dir_exists,
@@ -45,7 +42,16 @@ from sim2real.train.taskset import Taskset
 import cartopy.crs as ccrs
 import cartopy.feature as feature
 
-import sim2real.config as cfg
+from sim2real.config import (
+    DataSpec,
+    OptimSpec,
+    OutputSpec,
+    ModelSpec,
+    Paths,
+    names,
+)
+
+from abc import ABC, abstractmethod
 
 
 class Trainer(ABC):
@@ -55,15 +61,16 @@ class Trainer(ABC):
         opt: OptimSpec,
         out: OutputSpec,
         data: DataSpec,
-        mcfg: ModelSpec,
+        mspec: ModelSpec,
         train: bool = True,
     ) -> None:
         self.paths = paths
         self.opt = opt
         self.out = out
         self.data = data
+        self.mspec = mspec
 
-        self.exp_dir = exp_dir_sim(cfg.model)
+        self.exp_dir = exp_dir_sim(mspec)
         self.latest_path = f"{utils.weight_dir(self.exp_dir)}/latest.h5"
         self.best_path = f"{utils.weight_dir(self.exp_dir)}/best.h5"
 
@@ -88,52 +95,48 @@ class Trainer(ABC):
         # Add spatiotemporal data.
         self.aux = self._expand_aux(self.aux)
 
-        self._init_loaders()
+        self._init_dataloaders()
         self._init_model()
 
         if train:
             self._init_log()
 
-    def _init_loaders(self):
-        # don't collate as we want a list of tasks,
-        # not any tensors.
-        collate_fn = lambda x: x
-        self.task_loader = TaskLoader(
-            context=[self.era5, self.aux], target=[self.era5], time_freq="H"
-        )
+    def _init_taskloaders(self) -> Tuple[TaskLoader, TaskLoader, TaskLoader]:
+        """
+        Returns: (TaskLoader, TaskLoader, TaskLoader) representing
+            (train, val, test) task loaders.
+        """
+        context, target = [self.era5, self.aux], [self.era5]
+        tl = TaskLoader(context, target, time_freq="H")
+        self.task_loader = tl
 
-        train_set = Taskset(
-            data.train_dates,
-            self.task_loader,
-            self.context_points,
-            self.target_points,
-            deterministic=False,
-        )
+        def taskset(dates, freq, deterministic):
+            return Taskset(
+                tl,
+                self.context_points,
+                self.target_points,
+                self.opt,
+                dates,
+                freq,
+                deterministic=deterministic,
+            )
 
-        cv_set = Taskset(
-            data.cv_dates,
-            self.task_loader,
-            self.context_points,
-            self.target_points,
-            data.val_freq,
-            deterministic=True,
-        )
+        train_set = taskset(self.data.train_dates, "H", False)
+        val_set = taskset(self.data.train_dates, self.data.val_freq, True)
+        test_set = taskset(self.data.train_dates, self.data.val_freq, True)
 
-        test_set = Taskset(
-            data.test_dates,
-            self.task_loader,
-            self.context_points,
-            self.target_points,
-            data.val_freq,
-            deterministic=True,
-        )
+        return train_set, val_set, test_set
+
+    def _init_dataloaders(self):
+        train_set, cv_set, test_set = self._init_taskloaders()
 
         if self.opt.device == "cuda":
-            gen = torch.Generator(device=self.opt.device)
+            gen = torch.Generator(device="cuda")
         else:
             gen = torch.Generator()
 
         # Don't turn into pytorch tensors. We just want the sampling functionality.
+        collate_fn = lambda x: x
         self.train_loader = DataLoader(
             train_set,
             shuffle=True,
@@ -324,7 +327,7 @@ class Trainer(ABC):
             self._log(epoch, train_loss, val_lik)
             self._save_weights(epoch, val_lik)
 
-            if out.plots:
+            if self.out.plots:
                 for date in ["2022-01-01", "2022-06-01"]:
                     self.plot_prediction(name=f"epoch_{epoch}_{date}", date=date)
 
@@ -332,12 +335,12 @@ class Trainer(ABC):
         # Construct custom model.
         model = convcnp.from_taskloader(
             self.task_loader,
-            likelihood=cfg.model.likelihood,
-            unet_channels=cfg.model.unet_channels,
-            encoder_scales_learnable=cfg.model.encoder_scales_learnable,
-            decoder_scale_learnable=cfg.model.decoder_scale_learnable,
-            film=cfg.model.film,
-            freeze_film=cfg.model.freeze_film,
+            likelihood=self.mspec.likelihood,
+            unet_channels=self.mspec.unet_channels,
+            encoder_scales_learnable=self.mspec.encoder_scales_learnable,
+            decoder_scale_learnable=self.mspec.decoder_scale_learnable,
+            film=self.mspec.film,
+            freeze_film=self.mspec.freeze_film,
         )
 
         model = ConvNP(self.data_processor, self.task_loader, model)
@@ -410,12 +413,12 @@ class Trainer(ABC):
             # Set this in case we're running on HPC where we can't run login command.
             os.environ["WANDB_API_KEY"] = keys.WANDB_API_KEY
             config = {
-                "opt": asdict(opt),
-                "data": asdict(data),
-                "model": asdict(cfg.model),
+                "opt": asdict(self.opt),
+                "data": asdict(self.data),
+                "model": asdict(self.mspec),
             }
             self.wandb = wandb.init(
-                project="climate-sim2real", config=config, name=out.wandb_name
+                project="climate-sim2real", config=config, name=self.out.wandb_name
             )
 
     def _log(self, epoch, train_loss, val_loss):
@@ -441,7 +444,7 @@ class Trainer(ABC):
             self.model.model.receptive_field,
             self.data_processor,
             ccrs.PlateCarree(),
-            [*data.bounds.lon, *data.bounds.lat],
+            [*self.data.bounds.lon, *self.data.bounds.lat],
         )
 
         plt.gca().set_global()
@@ -502,14 +505,14 @@ class Trainer(ABC):
             transform=ccrs.PlateCarree(),
         )
 
-        bounds = [*data.bounds.lon, *data.bounds.lat]
+        bounds = [*self.data.bounds.lon, *self.data.bounds.lat]
         for ax in axs:
             ax.set_extent(bounds, crs=ccrs.PlateCarree())
             ax.add_feature(feature.BORDERS, linewidth=0.25)
             ax.coastlines(linewidth=0.25)
 
         if name is not None:
-            ensure_exists(paths.out)
+            ensure_exists(self.paths.out)
             save_plot(self.exp_dir, name, fig)
         else:
             plt.show()
