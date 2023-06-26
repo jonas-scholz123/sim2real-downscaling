@@ -52,12 +52,6 @@ def load_weights(model, path, loss_only=False):
 
         weights = state["weights"]
         model.load_state_dict(weights)
-        return (
-            model,
-            val_loss,
-            state["epoch"],
-            state["torch_state"],
-            state["numpy_state"],
-        )
+        return (model, val_loss, state["epoch"])
     except (FileNotFoundError, KeyError):
         return model, float("inf"), 0, None, None

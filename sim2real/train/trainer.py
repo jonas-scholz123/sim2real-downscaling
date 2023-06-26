@@ -1,6 +1,6 @@
 import os
 import random
-from typing import Tuple
+from typing import Tuple, Union
 import wandb
 import xarray as xr
 import pandas as pd
@@ -62,7 +62,6 @@ class Trainer(ABC):
         out: OutputSpec,
         data: DataSpec,
         mspec: ModelSpec,
-        train: bool = True,
     ) -> None:
         self.paths = paths
         self.opt = opt
@@ -70,62 +69,36 @@ class Trainer(ABC):
         self.data = data
         self.mspec = mspec
 
-        self.exp_dir = exp_dir_sim(mspec)
+        self.exp_dir = self._get_exp_dir(mspec)
         self.latest_path = f"{utils.weight_dir(self.exp_dir)}/latest.h5"
         self.best_path = f"{utils.weight_dir(self.exp_dir)}/best.h5"
-
         [ensure_dir_exists(path) for path in [self.latest_path, self.best_path]]
 
-        B.set_global_device(self.opt.device)
         if self.opt.device == "cuda":
             # Can't do this with MPS (need to change the deepsensor __init__ file).
+            B.set_global_device(self.opt.device)
             torch.set_default_device(self.opt.device)
-        B.cholesky_retry_factor = 1e8
-        B.epsilon = 1e-12
-
-        self.context_points = []
-        self.target_points = []
-
-        self.era5_raw = self.add_era5()
-        self.aux_raw = self.add_aux()
-        self.raw = [self.era5_raw, self.aux_raw]
-
-        self.data_processor = self._init_data_processor()
-        self.era5, self.aux = self.data_processor(self.raw)
-        # Add spatiotemporal data.
-        self.aux = self._expand_aux(self.aux)
 
         self._init_dataloaders()
         self._init_model()
+        self._init_log()
 
-        if train:
-            self._init_log()
+    @abstractmethod
+    def _get_exp_dir(self, mspec: ModelSpec):
+        """
+        Returns: exp_dir: str, the string specifying the training directory.
+            Should incorporate all relevant aspects of the model specification
+            so that each path is associated with one architecture.
+        """
+        return
 
+    @abstractmethod
     def _init_taskloaders(self) -> Tuple[TaskLoader, TaskLoader, TaskLoader]:
         """
         Returns: (TaskLoader, TaskLoader, TaskLoader) representing
             (train, val, test) task loaders.
         """
-        context, target = [self.era5, self.aux], [self.era5]
-        tl = TaskLoader(context, target, time_freq="H")
-        self.task_loader = tl
-
-        def taskset(dates, freq, deterministic):
-            return Taskset(
-                tl,
-                self.context_points,
-                self.target_points,
-                self.opt,
-                dates,
-                freq,
-                deterministic=deterministic,
-            )
-
-        train_set = taskset(self.data.train_dates, "H", False)
-        val_set = taskset(self.data.train_dates, self.data.val_freq, True)
-        test_set = taskset(self.data.train_dates, self.data.val_freq, True)
-
-        return train_set, val_set, test_set
+        return
 
     def _init_dataloaders(self):
         train_set, cv_set, test_set = self._init_taskloaders()
@@ -166,59 +139,25 @@ class Trainer(ABC):
         np.random.seed(self.opt.seed)
         torch.manual_seed(self.opt.seed)
 
+    @abstractmethod
     def _init_data_processor(self):
-        x1_min = float(min(data[names.lat].min() for data in self.raw))
-        x2_min = float(min(data[names.lon].min() for data in self.raw))
-        x1_max = float(max(data[names.lat].max() for data in self.raw))
-        x2_max = float(max(data[names.lon].max() for data in self.raw))
-        return DataProcessor(
-            time_name=names.time,
-            x1_name=names.lat,
-            x2_name=names.lon,
-            x1_map=(x1_min, x1_max),
-            x2_map=(x2_min, x2_max),
-        )
+        return
 
-    def add_era5(self):
-        era5 = load_era5()[names.temp]
-        self.context_points.append(self.data.era5_context)
-        self.target_points.append(self.data.era5_target)
-        return era5
+    @abstractmethod
+    def _add_var(
+        self,
+    ) -> Tuple[Union[xr.DataArray, pd.Series], Union[float, int], Union[float, int]]:
+        """
+        Returns: (var, context_points, target_points)
+        var: The pandas/xarray dataset representing the variable of interest e.g. Temperature.
+        context_points: fraction or number of context points
+        target_points: fraction or number of target points
+        """
+        return
 
-    def add_aux(self):
-        def _coarsen(high_res, low_res):
-            """
-            Coarsen factor for shrinking something high-res to low-res.
-            """
-            factor = self.data.aux_coarsen_factor * len(high_res) // len(low_res)
-            return int(factor)
-
-        aux = load_elevation()
-        coarsen = {
-            names.lat: _coarsen(aux[names.lat], self.era5_raw[names.lat]),
-            names.lon: _coarsen(aux[names.lon], self.era5_raw[names.lon]),
-        }
-        aux = aux.coarsen(coarsen, boundary="trim").mean()
-        self.context_points.append("all")
-        return aux
-
-    def _expand_aux(self, aux):
-        x1x2_ds = construct_x1x2_ds(aux)
-        aux["x1_arr"] = x1x2_ds["x1_arr"]
-        aux["x2_arr"] = x1x2_ds["x2_arr"]
-        times = self.era5_raw[names.time].values
-        dates = pd.date_range(times.min(), times.max(), freq="H")
-
-        # Day of year.
-        doy_ds = construct_circ_time_ds(dates, freq="D")
-        aux["cos_D"] = doy_ds["cos_D"]
-        aux["sin_D"] = doy_ds["sin_D"]
-
-        # Time of day.
-        tod_ds = construct_circ_time_ds(dates, freq="H")
-        aux["cos_H"] = tod_ds["cos_H"]
-        aux["sin_H"] = tod_ds["sin_H"]
-        return aux
+    @abstractmethod
+    def _add_aux(self) -> Tuple[Union[xr.DataArray, pd.Series], Union[float, int]]:
+        return
 
     def eval_on_batch(self, tasks):
         with torch.no_grad():
@@ -249,48 +188,9 @@ class Trainer(ABC):
         mean_batch_loss.backward()
         torch.nn.utils.clip_grad_norm_(self.model.model.parameters(), 0.01)
 
-        l = float(mean_batch_loss.detach().cpu().numpy())
-        if l < -5:
-            print("Bad loss!")
-            self.plot_prediction(name=f"loss_{l}", task=task)
         self.optimiser.step()
+        l = float(mean_batch_loss.detach().cpu().numpy())
         return l
-
-    def overfit_train(self):
-        """
-        Overfit to just one task to see if the model works.
-        """
-        epoch_losses = []
-
-        self.optimiser = optim.Adam(self.model.model.parameters(), lr=self.opt.lr)
-
-        self.pbar = tqdm(range(self.start_epoch, self.opt.num_epochs + 1))
-
-        if self.start_epoch == 1:
-            val_loss = self.evaluate()
-            self._log(0, val_loss, val_loss)
-
-        for epoch in self.pbar:
-            batch_losses = []
-            for i in range(self.opt.batches_per_epoch):
-                date = "2012-01-01"
-                test_date = pd.Timestamp(date)
-                task = self.task_loader(test_date, context_sampling=("all", "all"))
-                if i == 0:
-                    self.plot_prediction(name=f"epoch_{epoch}_test", task=task)
-                try:
-                    batch_loss = self.train_on_batch(task)
-                except:
-                    self.plot_prediction(name=f"epoch_{epoch}_test_broken", task=task)
-                    return
-
-                batch_losses.append(batch_loss)
-
-            train_loss = np.mean(batch_losses)
-            epoch_losses.append(train_loss)
-            val_lik = self.evaluate()
-            self._log(epoch, train_loss, val_lik)
-            self._save_weights(epoch, val_lik)
 
     def train(self):
         epoch_losses = []
@@ -298,7 +198,6 @@ class Trainer(ABC):
         train_iter = iter(self.train_loader)
 
         self.optimiser = optim.Adam(self.model.model.parameters(), lr=self.opt.lr)
-        # self.optimiser = optim.SGD(self.model.model.parameters(), lr=self.opt.lr)
 
         self.pbar = tqdm(range(self.start_epoch, self.opt.num_epochs + 1))
 
@@ -328,6 +227,7 @@ class Trainer(ABC):
             self._save_weights(epoch, val_lik)
 
             if self.out.plots:
+                # TODO: move to config, child classes.
                 for date in ["2022-01-01", "2022-06-01"]:
                     self.plot_prediction(name=f"epoch_{epoch}_{date}", date=date)
 
@@ -352,30 +252,15 @@ class Trainer(ABC):
         print(f"Model receptive field (fraction): {model.model.receptive_field}")
 
         if self.opt.start_from == "best":
-            (
-                model.model,
-                self.best_val_loss,
-                self.start_epoch,
-                torch_state,
-                numpy_state,
-            ) = load_weights(model.model, self.best_path)
+            model.model, self.best_val_loss, self.start_epoch = load_weights(
+                model.model, self.best_path
+            )
         elif self.opt.start_from == "latest":
-            (
-                model.model,
-                self.best_val_loss,
-                self.start_epoch,
-                torch_state,
-                numpy_state,
-            ) = load_weights(model.model, self.latest_path)
+            model.model, self.best_val_loss, self.start_epoch = load_weights(
+                model.model, self.latest_path
+            )
         else:
             self.start_epoch = 0
-            torch_state, numpy_state = None, None
-
-        # Return RNG for seamless continuation.
-        # if torch_state is not None:
-        #     torch.set_rng_state(torch_state)
-        # if numpy_state is not None:
-        #     np.random.set_state(numpy_state)
 
         # Start one epoch after where the last run started.
         self.start_epoch += 1
@@ -449,22 +334,30 @@ class Trainer(ABC):
 
         plt.gca().set_global()
 
+    @abstractmethod
+    def _plot_X_t(self):
+        """
+        For plotting, which target points should be predicted?
+        Returns pd.DataFrame/Series or xr.DataArray/DataSet
+        """
+        return
+
     def plot_prediction(self, name=None, date="2022-01-01", task=None):
         if task is None:
             test_date = pd.Timestamp(date)
             task = self.task_loader(test_date, context_sampling=(30, "all"))
 
-        mean_ds, std_ds = self.model.predict(task, X_t=self.era5_raw)
+        mean_ds, std_ds = self.model.predict(task, X_t=self._plot_X_t())
 
         coord_map = {
-            names.lat: self.era5_raw[names.lat],
-            names.lon: self.era5_raw[names.lon],
+            names.lat: self.var_raw[names.lat],
+            names.lon: self.var_raw[names.lon],
         }
 
         # Fix rounding errors along dimensions.
         mean_ds = mean_ds.assign_coords(coord_map)
         std_ds = std_ds.assign_coords(coord_map)
-        err_da = mean_ds[names.temp] - self.era5_raw
+        err_da = mean_ds[names.temp] - self.var_raw
 
         proj = ccrs.TransverseMercator(central_longitude=10, approx=False)
 
@@ -474,7 +367,7 @@ class Trainer(ABC):
 
         sel = {names.time: task["time"]}
 
-        era5_plot = self.era5_raw.sel(sel).plot(
+        era5_plot = self.var_raw.sel(sel).plot(
             cmap="seismic", ax=axs[0], transform=ccrs.PlateCarree()
         )
         cbar = era5_plot.colorbar
