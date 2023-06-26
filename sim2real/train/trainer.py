@@ -13,16 +13,6 @@ import lab as B
 from tqdm import tqdm
 import numpy as np
 from dataclasses import asdict
-
-
-import neuralprocesses.torch as nps
-import deepsensor.torch
-from deepsensor.data.utils import (
-    concat_tasks,
-    construct_x1x2_ds,
-    construct_circ_time_ds,
-)
-from deepsensor.data.processor import DataProcessor
 from deepsensor.data.loader import TaskLoader
 from deepsensor.model.models import ConvNP
 from deepsensor.plot import receptive_field, offgrid_context
@@ -30,15 +20,12 @@ from deepsensor.plot import receptive_field, offgrid_context
 from sim2real.utils import (
     ensure_dir_exists,
     ensure_exists,
-    exp_dir_sim,
     save_model,
     load_weights,
 )
 from sim2real import keys, utils
-from sim2real.datasets import load_elevation, load_era5
 from sim2real.plots import save_plot
 from sim2real.modules import convcnp
-from sim2real.train.taskset import Taskset
 import cartopy.crs as ccrs
 import cartopy.feature as feature
 
@@ -93,7 +80,7 @@ class Trainer(ABC):
         return
 
     @abstractmethod
-    def _init_taskloaders(self) -> Tuple[TaskLoader, TaskLoader, TaskLoader]:
+    def _init_tasksets(self) -> Tuple[TaskLoader, TaskLoader, TaskLoader]:
         """
         Returns: (TaskLoader, TaskLoader, TaskLoader) representing
             (train, val, test) task loaders.
@@ -101,7 +88,7 @@ class Trainer(ABC):
         return
 
     def _init_dataloaders(self):
-        train_set, cv_set, test_set = self._init_taskloaders()
+        train_set, cv_set, test_set = self._init_tasksets()
 
         if self.opt.device == "cuda":
             gen = torch.Generator(device="cuda")

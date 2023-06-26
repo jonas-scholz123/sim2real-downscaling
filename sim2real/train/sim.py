@@ -122,7 +122,7 @@ class SimTrainer(Trainer):
     def _get_exp_dir(self, mspec: ModelSpec):
         return exp_dir_sim(mspec)
 
-    def _init_taskloaders(self) -> Tuple[TaskLoader, TaskLoader, TaskLoader]:
+    def _init_tasksets(self) -> Tuple[Taskset, Taskset, Taskset]:
         """
         Returns: (TaskLoader, TaskLoader, TaskLoader) representing
             (train, val, test) task loaders.
