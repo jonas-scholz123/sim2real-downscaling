@@ -28,7 +28,7 @@ class Taskset(Dataset):
         """
         Must define either datetimes or time_range & freq.
         """
-        if datetimes:
+        if datetimes is not None:
             self.times = list(datetimes)
         else:
             self.times = list(pd.date_range(*time_range, freq=freq))

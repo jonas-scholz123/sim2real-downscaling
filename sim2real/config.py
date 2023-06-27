@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from enum import Enum
 from typing import Tuple
 from pathlib import Path
 import cartopy.crs as ccrs
@@ -35,6 +36,8 @@ class DataSpec:
     val_freq: str
     era5_context: Tuple[int, int]
     era5_target: int
+    dwd_context: Tuple[int, int]
+    dwd_target: int
     aux_coarsen_factor: float
 
 
@@ -44,6 +47,9 @@ class ModelSpec:
     film: bool
     freeze_film: bool
     likelihood: str
+    ppu: int
+    dim_yt: int
+    dim_yc: Tuple[int]
     encoder_scales_learnable: bool
     decoder_scale_learnable: bool
 
@@ -84,6 +90,16 @@ class OptimSpec:
     start_from: str
 
 
+class TunerType(Enum):
+    naive = 0
+
+
+@dataclass
+class TuneSpec:
+    tuner: TunerType
+    num_stations: int
+
+
 names = Names(
     temp="T2M",
     lat="LAT",
@@ -120,7 +136,9 @@ data = DataSpec(
     # of day are covered.
     val_freq="39H",
     era5_context=(5, 30),
-    era5_target=100,
+    era5_target="all",
+    dwd_context=(5, 50),
+    dwd_target="all",
     # How much more dense should the elevation data
     # be compared to the era5 data? Smaller => more dense
     # aux data.
@@ -140,6 +158,9 @@ opt = OptimSpec(
 
 model = ModelSpec(
     unet_channels=(128,) * 4,
+    dim_yt=1,
+    dim_yc=(1, 7),
+    ppu=200,  # Found from dwd.compute_ppu()
     film=True,
     freeze_film=True,
     likelihood="het",
@@ -154,3 +175,5 @@ out = OutputSpec(
     fig_crs=ccrs.TransverseMercator(central_longitude=10, approx=False),
     data_crs=ccrs.PlateCarree(),
 )
+
+tune = TuneSpec(tuner=TunerType.naive, num_stations=300)

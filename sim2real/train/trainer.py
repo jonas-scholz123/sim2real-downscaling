@@ -16,6 +16,7 @@ from dataclasses import asdict
 from deepsensor.data.loader import TaskLoader
 from deepsensor.model.models import ConvNP
 from deepsensor.plot import receptive_field, offgrid_context
+from sim2real.train.taskset import Taskset
 
 from sim2real.utils import (
     ensure_dir_exists,
@@ -66,6 +67,7 @@ class Trainer(ABC):
             B.set_global_device(self.opt.device)
             torch.set_default_device(self.opt.device)
 
+        self.data_processor = self._init_data_processor()
         self._init_dataloaders()
         self._init_model()
         self._init_log()
@@ -80,9 +82,9 @@ class Trainer(ABC):
         return
 
     @abstractmethod
-    def _init_tasksets(self) -> Tuple[TaskLoader, TaskLoader, TaskLoader]:
+    def _init_tasksets(self) -> Tuple[Taskset, Taskset, Taskset]:
         """
-        Returns: (TaskLoader, TaskLoader, TaskLoader) representing
+        Returns: (Taskset, Taskset, Taskset) representing
             (train, val, test) task loaders.
         """
         return
@@ -128,22 +130,6 @@ class Trainer(ABC):
 
     @abstractmethod
     def _init_data_processor(self):
-        return
-
-    @abstractmethod
-    def _add_var(
-        self,
-    ) -> Tuple[Union[xr.DataArray, pd.Series], Union[float, int], Union[float, int]]:
-        """
-        Returns: (var, context_points, target_points)
-        var: The pandas/xarray dataset representing the variable of interest e.g. Temperature.
-        context_points: fraction or number of context points
-        target_points: fraction or number of target points
-        """
-        return
-
-    @abstractmethod
-    def _add_aux(self) -> Tuple[Union[xr.DataArray, pd.Series], Union[float, int]]:
         return
 
     def eval_on_batch(self, tasks):
@@ -220,8 +206,10 @@ class Trainer(ABC):
 
     def _init_model(self):
         # Construct custom model.
-        model = convcnp.from_taskloader(
-            self.task_loader,
+        model_kwargs = dict(
+            dim_yc=self.mspec.dim_yc,
+            dim_yt=self.mspec.dim_yt,
+            points_per_unit=self.mspec.ppu,
             likelihood=self.mspec.likelihood,
             unet_channels=self.mspec.unet_channels,
             encoder_scales_learnable=self.mspec.encoder_scales_learnable,
@@ -229,6 +217,8 @@ class Trainer(ABC):
             film=self.mspec.film,
             freeze_film=self.mspec.freeze_film,
         )
+
+        model = convcnp.from_taskloader(self.task_loader, model_kwargs)
 
         model = ConvNP(self.data_processor, self.task_loader, model)
         self.best_val_loss = load_weights(None, self.best_path, loss_only=True)[1]

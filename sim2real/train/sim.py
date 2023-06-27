@@ -123,10 +123,6 @@ class SimTrainer(Trainer):
         return exp_dir_sim(mspec)
 
     def _init_tasksets(self) -> Tuple[Taskset, Taskset, Taskset]:
-        """
-        Returns: (TaskLoader, TaskLoader, TaskLoader) representing
-            (train, val, test) task loaders.
-        """
         context, target, c_points, t_points = self._get_data()
         tl = TaskLoader(context, target, time_freq="H")
         self.task_loader = tl
@@ -151,6 +147,12 @@ class SimTrainer(Trainer):
     def _add_var(
         self,
     ) -> Tuple[Union[xr.DataArray, pd.Series], Union[float, int], Union[float, int]]:
+        """
+        Returns: (var, context_points, target_points)
+        var: The pandas/xarray dataset representing the variable of interest e.g. Temperature.
+        context_points: fraction or number of context points
+        target_points: fraction or number of target points
+        """
         era5 = load_era5()[names.temp]
         return era5, self.data.era5_context, self.data.era5_target
 
@@ -223,5 +225,6 @@ class SimTrainer(Trainer):
             self._save_weights(epoch, val_lik)
 
 
-s = SimTrainer(paths, opt, out, data, model)
-s.train()
+if __name__ == "__main__":
+    s = SimTrainer(paths, opt, out, data, model)
+    s.train()
