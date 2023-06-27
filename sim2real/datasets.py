@@ -13,9 +13,11 @@ import geopandas as gpd
 from geopandas import GeoDataFrame
 import xarray as xr
 import numpy as np
+from scipy.spatial.distance import cdist
 
 from sim2real.config import Paths, paths, names, data
 from sim2real.gridder import Gridder
+from sim2real.utils import get_default_data_processor
 
 
 class QualityCode(Enum):
@@ -226,10 +228,40 @@ class DWDSTationData:
         Returns a dataframe indexed by [time, lat, lon] with only the temperature column T2M.
         """
         df = self.full()
-        print(df)
         return df.reset_index().set_index([names.time, names.lat, names.lon])[
             [names.temp]
         ]
+
+    def compute_ppu(self):
+        """
+        Compute the appropriate PPU to capture the shortest length-scale
+        interactions.
+        """
+
+        def smallest_distance(group):
+            if len(group) < 5:
+                return 1
+            coords = group.reset_index().drop(["time", "T2M"], axis=1)
+            distances = cdist(coords, coords, metric="euclid")
+            np.fill_diagonal(distances, np.inf)
+            smallest_distance = np.quantile(distances, 0.00)
+            return smallest_distance
+
+        df = self.to_deepsensor_df()
+        dp = get_default_data_processor()
+
+        # normalise lats/lons to [0, 1] range.
+        df = dp(df)
+
+        # select only a subset of available times. Don't need to check
+        # all, because in those 100 there will be one time that features
+        # the maximum number of stations.
+        dts = np.random.choice(df.reset_index()["time"].unique(), 100)
+        df = df.query("time in @dts")
+        grouped = df.groupby("time")
+        dists = grouped.apply(smallest_distance)
+        ppu = 1 / dists.min()
+        return ppu
 
 
 def load_era5():
@@ -241,3 +273,8 @@ def load_era5():
 
 def load_elevation():
     return xr.load_dataset(paths.srtm)
+
+
+if __name__ == "__main__":
+    dwd = DWDSTationData(paths)
+    print(dwd.compute_ppu())

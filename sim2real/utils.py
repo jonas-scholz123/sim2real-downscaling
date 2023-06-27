@@ -1,7 +1,8 @@
 import os
 import torch
-from sim2real.config import paths, ModelSpec, opt
+from sim2real.config import TuneSpec, paths, ModelSpec, opt, names, data
 import numpy as np
+from deepsensor.data.processor import DataProcessor
 
 
 def ensure_dir_exists(fpath):
@@ -12,11 +13,23 @@ def ensure_exists(dirpath):
     os.makedirs(dirpath, exist_ok=True)
 
 
-def exp_dir_sim(m: ModelSpec):
+def get_model_dir(m: ModelSpec):
     channel_str = str(m.unet_channels)[1:-1].replace(", ", "_")
     if m.film:
         channel_str += "film"
-    path = f"{paths.out}/{m.likelihood}/{channel_str}/sim"
+    return f"{paths.out}/{m.likelihood}/{channel_str}"
+
+
+def exp_dir_sim(m: ModelSpec):
+    model_dir = get_model_dir(m)
+    path = f"{model_dir}/sim"
+    ensure_exists(path)
+    return path
+
+
+def exp_dir_sim2real(m: ModelSpec, t: TuneSpec):
+    model_dir = get_model_dir(m)
+    path = f"{model_dir}/sim2real_{t.num_stations}/{t.tuner}"
     ensure_exists(path)
     return path
 
@@ -40,6 +53,19 @@ def save_model(
             "numpy_state": numpy_state,
         },
         path,
+    )
+
+
+def get_default_data_processor():
+    x1_min, x1_max = data.bounds.lat
+    x2_min, x2_max = data.bounds.lon
+
+    return DataProcessor(
+        time_name=names.time,
+        x1_name=names.lat,
+        x2_name=names.lon,
+        x1_map=(x1_min, x1_max),
+        x2_map=(x2_min, x2_max),
     )
 
 
