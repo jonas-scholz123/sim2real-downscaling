@@ -58,6 +58,8 @@ class Trainer(ABC):
         self.data = data
         self.mspec = mspec
 
+        self.loaded_checkpoint = False
+
         self.exp_dir = self._get_exp_dir(mspec)
         self.latest_path = f"{utils.weight_dir(self.exp_dir)}/latest.h5"
         self.best_path = f"{utils.weight_dir(self.exp_dir)}/best.h5"
@@ -218,7 +220,7 @@ class Trainer(ABC):
             freeze_film=self.mspec.freeze_film,
         )
 
-        model = convcnp.from_taskloader(self.task_loader, model_kwargs)
+        model = convcnp.from_taskloader(self.task_loader, **model_kwargs)
 
         model = ConvNP(self.data_processor, self.task_loader, model)
         self.best_val_loss = load_weights(None, self.best_path, loss_only=True)[1]
@@ -232,11 +234,16 @@ class Trainer(ABC):
             model.model, self.best_val_loss, self.start_epoch = load_weights(
                 model.model, self.best_path
             )
+            print("Starting training from best.")
+            self.loaded_checkpoint = True
         elif self.opt.start_from == "latest":
             model.model, self.best_val_loss, self.start_epoch = load_weights(
                 model.model, self.latest_path
             )
+            print("Starting training from latest.")
+            self.loaded_checkpoint = True
         else:
+            print("Starting training from scratch.")
             self.start_epoch = 0
 
         # Start one epoch after where the last run started.

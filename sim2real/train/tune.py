@@ -25,7 +25,7 @@ from sim2real.config import (
 )
 from sim2real.train.taskset import Taskset
 from sim2real.train.trainer import Trainer
-from sim2real.utils import exp_dir_sim2real
+from sim2real.utils import exp_dir_sim, exp_dir_sim2real, load_weights, weight_dir
 from sim2real.datasets import DWDSTationData, load_elevation
 
 
@@ -44,6 +44,28 @@ class Sim2RealTrainer(Trainer):
         self.tspec = tspec
 
         super().__init__(paths, opt, out, data, mspec)
+        self._load_initial_weights()
+
+    def _load_initial_weights(self):
+        if self.loaded_checkpoint:
+            # We've loaded a Sim2Real checkpoint and don't need anything further.
+            return
+
+        sim_exp_dir = exp_dir_sim(self.mspec)
+        pretrained_path = f"{weight_dir(sim_exp_dir)}/best.h5"
+
+        # We need to load the best pretrained model weights.
+        self.model.model, self.best_val_loss, self.start_epoch = load_weights(
+            self.model.model, pretrained_path
+        )
+
+        if self.best_val_loss == float("inf"):
+            raise FileNotFoundError(
+                "Could not load appropriate pre-trained weights for this model configuration."
+            )
+
+        print("Starting training from best pretrained.")
+        self.loaded_checkpoint = True
 
     def _get_exp_dir(self, mspec: ModelSpec):
         return exp_dir_sim2real(mspec, self.tspec)
