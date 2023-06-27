@@ -156,19 +156,6 @@ class SimTrainer(Trainer):
         era5 = load_era5()[names.temp]
         return era5, self.data.era5_context, self.data.era5_target
 
-    def _init_data_processor(self):
-        x1_min = float(min(data[names.lat].min() for data in self.raw))
-        x2_min = float(min(data[names.lon].min() for data in self.raw))
-        x1_max = float(max(data[names.lat].max() for data in self.raw))
-        x2_max = float(max(data[names.lon].max() for data in self.raw))
-        return DataProcessor(
-            time_name=names.time,
-            x1_name=names.lat,
-            x2_name=names.lon,
-            x1_map=(x1_min, x1_max),
-            x2_map=(x2_min, x2_max),
-        )
-
     def _add_aux(self) -> Tuple[Union[xr.DataArray, pd.Series], Union[float, int, str]]:
         def _coarsen(high_res, low_res):
             """

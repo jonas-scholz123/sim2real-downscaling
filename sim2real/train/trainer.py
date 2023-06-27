@@ -23,6 +23,7 @@ from sim2real.utils import (
     ensure_exists,
     save_model,
     load_weights,
+    get_default_data_processor,
 )
 from sim2real import keys, utils
 from sim2real.plots import save_plot
@@ -128,9 +129,8 @@ class Trainer(ABC):
         np.random.seed(self.opt.seed)
         torch.manual_seed(self.opt.seed)
 
-    @abstractmethod
     def _init_data_processor(self):
-        return
+        return get_default_data_processor()
 
     def eval_on_batch(self, tasks):
         with torch.no_grad():

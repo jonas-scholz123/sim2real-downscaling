@@ -106,17 +106,6 @@ class Sim2RealTrainer(Trainer):
         test = self._dwd_to_taskset(test, True)
         return train, val, test
 
-    def _init_data_processor(self):
-        x1_min, x1_max = self.data.bounds.lat
-        x2_min, x2_max = self.data.bounds.lon
-        return DataProcessor(
-            time_name=names.time,
-            x1_name=names.lat,
-            x2_name=names.lon,
-            x1_map=(x1_min, x1_max),
-            x2_map=(x2_min, x2_max),
-        )
-
     def _add_aux(self) -> Tuple[Union[xr.DataArray, pd.Series], Union[float, int, str]]:
         def _coarsen(high_res, low_res):
             """
