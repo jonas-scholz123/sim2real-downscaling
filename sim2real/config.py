@@ -157,7 +157,7 @@ opt = OptimSpec(
 )
 
 model = ModelSpec(
-    unet_channels=(128,) * 4,
+    unet_channels=(96,) * 6,
     dim_yt=1,
     dim_yc=(1, 7),
     ppu=200,  # Found from dwd.compute_ppu()
