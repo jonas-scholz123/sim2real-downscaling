@@ -10,7 +10,7 @@
 
 #! sbatch directives begin here ###############################
 #! Name of the job:
-#SBATCH -J sim2real-pretraining
+#SBATCH -J weather-sim2real-finetuning
 #! Which project should be charged (NB Wilkes2 projects end in '-GPU'):
 #SBATCH -A MLMI-JS2731-SL2-GPU
 #! How many whole nodes should be allocated?
@@ -22,7 +22,7 @@
 #! Note that the job submission script will enforce no more than 32 cpus per GPU.
 #SBATCH --gres=gpu:1
 #! How much wallclock time will be required?
-#SBATCH --time=01:00:00
+#SBATCH --time=03:00:00
 #! What types of email messages do you wish to receive?
 #SBATCH --mail-type=ALL
 #! Uncomment this to prevent the job from being requeued (e.g. if
@@ -54,9 +54,9 @@ mpi_tasks_per_node=$(echo "$SLURM_TASKS_PER_NODE" | sed -e  's/^\([0-9][0-9]*\).
 
 #! Optionally modify the environment seen by the application
 #! (note that SLURM reproduces the environment at submission irrespective of ~/.bashrc):
-#!. /etc/profile.d/modules.sh                # Leave this line (enables the module command)
-#! module purge                               # Removes all modules still loaded
-#!module load rhel8/default-amp              # REQUIRED - loads the basic environment
+. /etc/profile.d/modules.sh                # Leave this line (enables the module command)
+module purge                               # Removes all modules still loaded
+module load rhel8/default-amp              # REQUIRED - loads the basic environment
 module load miniconda/3
 
 #! Allows conda commands to work.
@@ -65,11 +65,10 @@ source /home/${USER}/.bashrc
 conda deactivate
 conda activate sim2real
 
-source /rds/project/rds-xyBFuSj0hm0/MLMI2.M2022/miniconda3/bin/activate
 #! Insert additional module load commands after this line if needed:
 
 #! Full path to application executable: 
-application="python simreal/ds.py"
+application="python sim2real/train/tune.py"
 
 #! Work directory (i.e. where the job will run):
 workdir="$SLURM_SUBMIT_DIR"  # The value of SLURM_SUBMIT_DIR sets workdir to the directory
