@@ -143,6 +143,7 @@ class DWDSTationData:
         return gdf
 
     def train_val_test_split(self, val_frac=0.2, seed=42) -> Tuple:
+        #TODO: Redo.
         v = gpd.read_feather(paths.dwd_test_stations)
 
         # Choose nearest stations to VALUE test stations.
