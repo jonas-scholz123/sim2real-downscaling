@@ -88,6 +88,9 @@ class OptimSpec:
     num_epochs: int
     lr: float
     start_from: str
+    early_stop_patience: int
+    scheduler_patience: int
+    scheduler_factor: float
 
 
 class TunerType(Enum):
@@ -154,13 +157,16 @@ opt = OptimSpec(
     num_epochs=300,
     lr=3e-4,
     start_from=None,  # None, "best", "latest"
+    scheduler_patience=10,
+    early_stop_patience=30,
+    scheduler_factor=1 / 3,
 )
 
 model = ModelSpec(
     unet_channels=(96,) * 6,
     dim_yt=1,
     dim_yc=(1, 7),
-    ppu=200,  # Found from dwd.compute_ppu()
+    ppu=64,  # Found from dwd.compute_ppu()
     film=True,
     freeze_film=True,
     likelihood="het",
@@ -169,7 +175,7 @@ model = ModelSpec(
 )
 
 out = OutputSpec(
-    wandb=False,
+    wandb=True,
     plots=True,
     wandb_name=None,
     fig_crs=ccrs.TransverseMercator(central_longitude=10, approx=False),

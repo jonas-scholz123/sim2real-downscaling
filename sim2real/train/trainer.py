@@ -43,6 +43,24 @@ from sim2real.config import (
 from abc import ABC, abstractmethod
 
 
+class EarlyStopper:
+    def __init__(self, patience=1, min_delta=0):
+        self.patience = patience
+        self.min_delta = min_delta
+        self.counter = 0
+        self.min_validation_loss = np.inf
+
+    def early_stop(self, validation_loss):
+        if validation_loss < self.min_validation_loss:
+            self.min_validation_loss = validation_loss
+            self.counter = 0
+        elif validation_loss > (self.min_validation_loss + self.min_delta):
+            self.counter += 1
+            if self.counter >= self.patience:
+                return True
+        return False
+
+
 class Trainer(ABC):
     def __init__(
         self,
@@ -173,6 +191,13 @@ class Trainer(ABC):
         train_iter = iter(self.train_loader)
 
         self.optimiser = optim.Adam(self.model.model.parameters(), lr=self.opt.lr)
+        self.early_stopper = EarlyStopper(self.opt.early_stop_patience)
+        self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+            self.optimiser,
+            mode="min",
+            factor=self.opt.scheduler_factor,
+            patience=self.opt.scheduler_patience,
+        )
 
         self.pbar = tqdm(range(self.start_epoch, self.opt.num_epochs + 1))
 
@@ -197,14 +222,19 @@ class Trainer(ABC):
 
             train_loss = np.mean(batch_losses)
             epoch_losses.append(train_loss)
-            val_lik = self.evaluate()
-            self._log(epoch, train_loss, val_lik)
-            self._save_weights(epoch, val_lik)
+            val_loss = self.evaluate()
+            self._save_weights(epoch, val_loss)
+            self._log(epoch, train_loss, val_loss)
 
             if self.out.plots:
                 # TODO: move to config, child classes.
                 for date in ["2022-01-01", "2022-06-01"]:
                     self.plot_prediction(name=f"epoch_{epoch}_{date}", date=date)
+
+            if self.early_stopper.early_stop(val_loss):
+                break
+
+            self.scheduler.step(val_loss)
 
     def _init_model(self):
         # Construct custom model.
