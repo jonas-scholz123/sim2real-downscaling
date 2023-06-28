@@ -41,6 +41,11 @@ from sim2real.config import (
 )
 
 from abc import ABC, abstractmethod
+import shapely
+import warnings
+from shapely.errors import ShapelyDeprecationWarning
+
+warnings.filterwarnings("ignore", category=ShapelyDeprecationWarning)
 
 
 class EarlyStopper:
@@ -250,8 +255,9 @@ class Trainer(ABC):
             freeze_film=self.mspec.freeze_film,
         )
 
-        model = convcnp.from_taskloader(self.task_loader, **model_kwargs)
+        # model = convcnp.from_taskloader(self.task_loader, **model_kwargs)
 
+        # model = ConvNP(self.data_processor, self.task_loader, model)
         model = ConvNP(self.data_processor, self.task_loader, model)
         self.best_val_loss = load_weights(None, self.best_path, loss_only=True)[1]
         self.num_params = sum(
