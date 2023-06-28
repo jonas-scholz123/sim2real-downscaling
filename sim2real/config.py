@@ -150,15 +150,15 @@ data = DataSpec(
 
 opt = OptimSpec(
     seed=42,
-    device="cpu",
+    device="cuda",
     batch_size=16,
     batch_size_val=128,
-    batches_per_epoch=50,
-    num_epochs=300,
-    lr=3e-4,
+    batches_per_epoch=200,
+    num_epochs=200,
+    lr=3e-5,
     start_from=None,  # None, "best", "latest"
-    scheduler_patience=10,
-    early_stop_patience=30,
+    scheduler_patience=5,
+    early_stop_patience=15,
     scheduler_factor=1 / 3,
 )
 
@@ -166,7 +166,7 @@ model = ModelSpec(
     unet_channels=(96,) * 6,
     dim_yt=1,
     dim_yc=(1, 7),
-    ppu=64,  # Found from dwd.compute_ppu()
+    ppu=200,  # Found from dwd.compute_ppu()
     film=True,
     freeze_film=True,
     likelihood="het",
