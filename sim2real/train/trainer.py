@@ -83,6 +83,8 @@ class Trainer(ABC):
 
         self.loaded_checkpoint = False
 
+        self._init_log()
+
         self.exp_dir = self._get_exp_dir(mspec)
         self.latest_path = f"{utils.weight_dir(self.exp_dir)}/latest.h5"
         self.best_path = f"{utils.weight_dir(self.exp_dir)}/best.h5"
@@ -96,7 +98,6 @@ class Trainer(ABC):
         self.data_processor = self._init_data_processor()
         self._init_dataloaders()
         self._init_model()
-        self._init_log()
 
     @abstractmethod
     def _get_exp_dir(self, mspec: ModelSpec):
