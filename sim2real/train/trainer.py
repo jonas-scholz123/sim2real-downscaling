@@ -258,7 +258,7 @@ class Trainer(ABC):
         # model = convcnp.from_taskloader(self.task_loader, **model_kwargs)
 
         # model = ConvNP(self.data_processor, self.task_loader, model)
-        model = ConvNP(self.data_processor, self.task_loader, model)
+        model = ConvNP(self.data_processor, self.task_loader)
         self.best_val_loss = load_weights(None, self.best_path, loss_only=True)[1]
         self.num_params = sum(
             p.numel() for p in model.model.parameters() if p.requires_grad
