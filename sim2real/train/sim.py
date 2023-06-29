@@ -133,14 +133,14 @@ class SimTrainer(Trainer):
                 c_points,
                 t_points,
                 self.opt,
-                dates,
-                freq,
+                time_range=dates,
+                freq=freq,
                 deterministic=deterministic,
             )
 
         train_set = taskset(self.data.train_dates, "H", False)
-        val_set = taskset(self.data.train_dates, self.data.val_freq, True)
-        test_set = taskset(self.data.train_dates, self.data.val_freq, True)
+        val_set = taskset(self.data.cv_dates, self.data.val_freq, True)
+        test_set = taskset(self.data.test_dates, self.data.val_freq, True)
 
         return train_set, val_set, test_set
 
