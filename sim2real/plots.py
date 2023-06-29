@@ -107,7 +107,9 @@ def init_fig(nrows=1, ncols=1, figsize=(4, 4)):
     )
     bounds = [*data.bounds.lon, *data.bounds.lat]
 
-    for ax in np.array(axs).flat:
+    axs = np.array(axs).flatten()
+
+    for ax in axs:
         ax.set_extent(bounds, crs=ccrs.PlateCarree())
         ax.add_feature(feature.BORDERS, linewidth=0.25)
         ax.coastlines(linewidth=0.25)

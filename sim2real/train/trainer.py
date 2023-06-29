@@ -13,6 +13,7 @@ import lab as B
 from tqdm import tqdm
 import numpy as np
 from dataclasses import asdict
+from deepsensor import context_encoding
 from deepsensor.data.loader import TaskLoader
 from deepsensor.model.models import ConvNP
 from deepsensor.plot import receptive_field, offgrid_context
@@ -26,7 +27,7 @@ from sim2real.utils import (
     get_default_data_processor,
 )
 from sim2real import keys, utils
-from sim2real.plots import save_plot
+from sim2real.plots import init_fig, save_plot
 from sim2real.modules import convcnp
 import cartopy.crs as ccrs
 import cartopy.feature as feature
@@ -99,6 +100,8 @@ class Trainer(ABC):
         self._init_dataloaders()
         self._init_model()
 
+        self.test_tasks = [self.test_set[0]]
+
     @abstractmethod
     def _get_exp_dir(self, mspec: ModelSpec):
         """
@@ -117,7 +120,7 @@ class Trainer(ABC):
         return
 
     def _init_dataloaders(self):
-        train_set, cv_set, test_set = self._init_tasksets()
+        self.train_set, self.cv_set, self.test_set = self._init_tasksets()
 
         if self.opt.device == "cuda":
             gen = torch.Generator(device="cuda")
@@ -127,7 +130,7 @@ class Trainer(ABC):
         # Don't turn into pytorch tensors. We just want the sampling functionality.
         collate_fn = lambda x: x
         self.train_loader = DataLoader(
-            train_set,
+            self.train_set,
             shuffle=True,
             batch_size=self.opt.batch_size,
             collate_fn=collate_fn,
@@ -135,7 +138,7 @@ class Trainer(ABC):
         )
 
         self.cv_loader = DataLoader(
-            cv_set,
+            self.cv_set,
             shuffle=False,
             batch_size=self.opt.batch_size_val,
             collate_fn=collate_fn,
@@ -143,7 +146,7 @@ class Trainer(ABC):
         )
 
         self.test_loader = DataLoader(
-            test_set,
+            self.test_set,
             shuffle=False,
             batch_size=self.opt.batch_size_val,
             collate_fn=collate_fn,
@@ -211,6 +214,8 @@ class Trainer(ABC):
             val_loss = self.evaluate()
             self._log(0, val_loss, val_loss)
 
+        print(f"Starting from episode {self.start_epoch}")
+
         for epoch in self.pbar:
             batch_losses = []
             for i in range(self.opt.batches_per_epoch):
@@ -269,21 +274,20 @@ class Trainer(ABC):
             model.model, self.best_val_loss, self.start_epoch = load_weights(
                 model.model, self.best_path
             )
-            print("Starting training from best.")
+            print("Loaded best weights.")
             self.loaded_checkpoint = True
         elif self.opt.start_from == "latest":
             model.model, self.best_val_loss, self.start_epoch = load_weights(
                 model.model, self.latest_path
             )
-            print("Starting training from latest.")
+            print("Loaded latest weights.")
             self.loaded_checkpoint = True
         else:
-            print("Starting training from scratch.")
+            print("Initialised random weights.")
             self.start_epoch = 0
 
         # Start one epoch after where the last run started.
         self.start_epoch += 1
-        print(f"Starting from episode {self.start_epoch}")
         model.model = model.model.to(self.opt.device)
         self.model = model
 
@@ -352,6 +356,27 @@ class Trainer(ABC):
         )
 
         plt.gca().set_global()
+
+    def plot_example_task(self):
+        fig = context_encoding(self.model, self.test_tasks[0], self.task_loader)
+        save_plot(self.exp_dir, "example_task_model_inputs", fig)
+
+    def context_target_plot(self):
+        fig, axs = init_fig()
+        ax = axs
+
+        offgrid_context(
+            ax,
+            self.test_tasks[0],
+            self.data_processor,
+            self.task_loader,
+            plot_target=True,
+            add_legend=True,
+            linewidths=0.5,
+            transform=ccrs.PlateCarree(),
+        )
+
+        save_plot(self.exp_dir, "example_task_context_target", fig)
 
     @abstractmethod
     def _plot_X_t(self):

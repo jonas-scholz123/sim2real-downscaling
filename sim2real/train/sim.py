@@ -20,7 +20,7 @@ from sim2real.utils import exp_dir_sim
 
 from sim2real import keys, utils
 from sim2real.datasets import load_elevation, load_era5
-from sim2real.plots import save_plot
+from sim2real.plots import save_plot, init_fig
 from sim2real.modules import convcnp
 from sim2real.train.taskset import Taskset
 from sim2real.train.trainer import Trainer
@@ -40,37 +40,6 @@ from sim2real.config import (
     opt,
     model,
 )
-
-
-def sample_plot(model, task, task_loader):
-    fig = context_encoding(model, task, task_loader)
-    plt.show()
-
-
-def context_target_plot(task, data_processor, task_loader):
-    fig = plt.figure(figsize=(6, 6))
-    ax = plt.axes(projection=ccrs.TransverseMercator(central_longitude=10))
-    bounds = [*data.bounds.lon, *data.bounds.lat]
-    ax.set_extent(bounds, crs=ccrs.PlateCarree())
-
-    ax.add_feature(feature.BORDERS, linewidth=0.25)
-    ax.add_feature(feature.LAKES, linewidth=0.25)
-    ax.add_feature(feature.RIVERS, linewidth=0.25)
-    ax.add_feature(feature.OCEAN)
-    ax.add_feature(feature.LAND)
-    ax.coastlines(linewidth=0.25)
-
-    offgrid_context(
-        ax,
-        task,
-        data_processor,
-        task_loader,
-        plot_target=True,
-        add_legend=True,
-        linewidths=0.5,
-        transform=ccrs.PlateCarree(),
-    )
-    plt.show()
 
 
 class SimTrainer(Trainer):
@@ -214,4 +183,6 @@ class SimTrainer(Trainer):
 
 if __name__ == "__main__":
     s = SimTrainer(paths, opt, out, data, model)
+    # s.plot_example_task()
+    # s.context_target_plot()
     s.train()

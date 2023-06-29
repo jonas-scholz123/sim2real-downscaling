@@ -1,3 +1,4 @@
+# %%
 from typing import Tuple, Union
 import xarray as xr
 import pandas as pd
@@ -154,4 +155,6 @@ class Sim2RealTrainer(Trainer):
 
 if __name__ == "__main__":
     s2r = Sim2RealTrainer(paths, opt, out, data, model, tune)
-    s2r.train()
+    # s2r.context_target_plot()
+    # s2r.train()
+    s2r.plot_example_task()
