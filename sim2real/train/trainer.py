@@ -256,19 +256,8 @@ class Trainer(ABC):
             freeze_film=self.mspec.freeze_film,
         )
 
-        # model = convcnp.from_taskloader(self.task_loader, **model_kwargs)
-
-        # model = ConvNP(self.data_processor, self.task_loader, model)
-        # model = ConvNP(self.data_processor, self.task_loader)
-        model = ConvNP(
-            self.data_processor,
-            self.task_loader,
-            verbose=True,
-            likelihood=self.mspec.likelihood,
-            unet_channels=self.mspec.unet_channels,
-            encoder_scales_learnable=self.mspec.encoder_scales_learnable,
-            decoder_scale_learnable=self.mspec.decoder_scale_learnable,
-        )
+        model = convcnp.from_taskloader(self.task_loader, **model_kwargs)
+        model = ConvNP(self.data_processor, self.task_loader, model)
         self.best_val_loss = load_weights(None, self.best_path, loss_only=True)[1]
         self.num_params = sum(
             p.numel() for p in model.model.parameters() if p.requires_grad
