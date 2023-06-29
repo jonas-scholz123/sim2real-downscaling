@@ -58,7 +58,7 @@ class Taskset(Dataset):
         return len(self.times)
 
     def __getitem__(self, idx):
-        if idx == len(self) - 1 and self.deterministic:
+        if idx == 0 and self.deterministic:
             # Reset rng for deterministic
             self.rng = np.random.default_rng(self.seed)
         # Random number of context observations
