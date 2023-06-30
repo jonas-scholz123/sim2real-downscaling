@@ -143,12 +143,12 @@ class DWDSTationData:
         return gdf
 
     def train_val_test_split(self, val_frac=0.2, seed=42) -> Tuple:
-        #TODO: Redo.
+        # TODO: Redo.
         v = gpd.read_feather(paths.dwd_test_stations)
 
         # Choose nearest stations to VALUE test stations.
-        test_station_ids = set(v.sjoin_nearest(self.meta_df)[names.station_id])
-        query = f"{names.station_id} in @test_station_ids"
+        eval_station_ids = set(v.sjoin_nearest(self.meta_df)[names.station_id])
+        query = f"{names.station_id} in @eval_station_ids"
         test_df = self.df.query(query)
         test_meta_df = self.meta_df.query(query)
 
@@ -276,6 +276,19 @@ def load_elevation():
     return xr.load_dataset(paths.srtm)
 
 
+def load_dwd_eval():
+    return pd.read_feather(paths.dwd_test_stations)
+
+
+def load_station_splits():
+    df = pd.read_feather(paths.station_split).set_index(names.station_id, drop=True)
+    return df
+
+
+def load_time_splits():
+    df = pd.read_feather(paths.time_split).set_index(names.time, drop=True)
+    return df
+
+
 if __name__ == "__main__":
-    dwd = DWDSTationData(paths)
-    print(dwd.compute_ppu())
+    print(load_station_splits())

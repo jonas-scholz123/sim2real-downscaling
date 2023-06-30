@@ -1,4 +1,5 @@
 # %%
+from typing import Tuple
 import urllib.request
 import os
 import pandas as pd
@@ -8,6 +9,7 @@ import geopandas as gpd
 
 from sim2real.config import data, paths, names
 from sim2real.utils import ensure_dir_exists
+from sim2real.datasets import DWDSTationData
 
 
 fnames = [
@@ -622,6 +624,11 @@ def process_dwd():
     meta_df = gpd.GeoDataFrame(meta_df, geometry=geometry)
     meta_df.crs = data.crs_str
 
+    # Filter days with not enoungh data. (Mainly at the start of dataset period).
+    counts = df.set_index(names.time).groupby(names.time).count()
+    good_times = counts[counts[names.station_id] > 400].index.unique()
+    df = df[df[names.time].isin(good_times)].reset_index(drop=True)
+
     # cache for faster loading in future.
     ensure_dir_exists(paths.dwd)
     ensure_dir_exists(paths.dwd_meta)
@@ -652,7 +659,220 @@ def process_value_stations():
     df.to_feather(paths.dwd_test_stations)
 
 
+def datetime_split_plot():
+    from sim2real.plots import save_plot
+    import matplotlib.pyplot as plt
+
+    full = DWDSTationData(paths).full()
+    dts = full.index.get_level_values(names.time).unique()
+
+    train, val, test = train_val_test_dts(dts)
+    plt.figure(figsize=(10, 1))
+    plt.scatter(train, [1 for _ in train], s=100, marker="|", label="train")
+    plt.scatter(val, [1 for _ in val], s=100, marker="|", label="validation")
+    plt.scatter(test, [1 for _ in test], s=100, marker="|", label="evaluation")
+
+    plt.xlim(pd.Timestamp("2021-11-03"), pd.Timestamp("2022-04-01"))
+    plt.ylim(0.5, 2)
+    plt.legend(ncol=3)
+    plt.xticks(rotation=45)
+    plt.yticks([])
+    save_plot(None, "datetime_split")
+
+
+def train_val_test_dts(dts):
+    """
+    This follows the google paper's sampling strategy.
+    """
+    dts = list(dts)
+
+    train, val, test = [], [], []
+
+    # 19 days.
+    train_duration = 19 * 24
+    # 2 days.
+    val_duration = 2 * 24
+    # 2.5 days.
+    test_duration = 5 * 12
+
+    # 2 days skipped at borders.
+    skip_duration = 2 * 24
+
+    i = 0
+    while i < len(dts):
+        # Add training datetimes.
+        train += dts[i : i + train_duration]
+        i += train_duration + skip_duration
+        if i >= len(dts):
+            break
+
+        val += dts[i : i + val_duration]
+        i += val_duration + skip_duration
+        if i >= len(dts):
+            break
+
+        test += dts[i : i + test_duration]
+        i += test_duration + skip_duration
+        if i >= len(dts):
+            break
+
+    # Make sure there's no overlap.
+    assert (
+        set(train).isdisjoint(val)
+        and set(val).isdisjoint(test)
+        and set(test).isdisjoint(train)
+    )
+
+    return train, val, test
+
+
+def split(df, dts, station_ids) -> Tuple[pd.DataFrame]:
+    """
+    Split a dataframe by BOTH datetimes and station ids.
+
+    Returns: (split, remainder): pd.DataFrame
+    """
+
+    split = df.query(f"{names.station_id} in @station_ids and {names.time} in @dts")
+    remainder = df.query(
+        f"{names.station_id} not in @station_ids and {names.time} not in @dts"
+    )
+
+    return split, remainder
+
+
+def get_test_station_ids():
+    dwd = DWDSTationData(paths)
+
+    df = pd.read_csv(f"{paths.root}/data/raw/dwd/value_stations.txt")
+    df.columns = [
+        names.station_id,
+        names.station_name,
+        names.lon,
+        names.lat,
+        names.height,
+        "source",
+    ]
+
+    # StationID does not match with DWD dataset.
+    df = df.drop([names.station_id, "source"], axis=1)
+
+    # Strip whitespace:
+    df[names.station_name] = df[names.station_name].str.strip()
+
+    geometry = gpd.points_from_xy(df[names.lon], df[names.lat])
+    df = gpd.GeoDataFrame(df, geometry=geometry)
+    df.crs = data.crs_str
+
+    test_station_ids = set(df.sjoin_nearest(dwd.meta_df)[names.station_id])
+    return test_station_ids
+
+
+def distance_matrix(gdf1, gdf2):
+    # Station distance matrix:
+    return gdf1.geometry.apply(lambda g: gdf2.distance(g))
+
+
+def pick_stations(stations, distance_matrix, num_stations_left):
+    if len(stations) == 0:
+        # Start somewhere.
+        stations = []
+        num_stations_left -= 1
+
+    if num_stations_left == 0:
+        return stations
+
+    stations.append(get_furthest(stations, distance_matrix))
+    return pick_stations(stations, distance_matrix, num_stations_left - 1)
+
+
+def get_furthest(stations, distance_matrix):
+    """
+    Gets the furthest station from all the current stations.
+    """
+    smallest = distance_matrix[stations].min(axis=1)
+    return smallest[smallest == smallest.max()].index[0]
+
+
+def station_sampling_plot():
+    full = DWDSTationData(paths).full()
+    gdf = full.groupby(names.station_id).first()
+
+    from sim2real.plots import init_fig, save_plot
+
+    fig, axs, transform = init_fig(1, 4, ret_transform=True, figsize=(14, 6))
+
+    Ns = [1, 5, 50, 200]
+
+    for N, ax in zip(Ns, axs):
+        stations = pick_stations([13777], distance_matrix(gdf, gdf), N - 1)
+        subset = gdf.query(f"{names.station_id} in @stations")
+        subset.plot(
+            ax=ax, transform=transform, marker="o", facecolor="none", color="C0"
+        )
+        ax.set_title(f"$N = {N}$")
+
+    save_plot(None, "station_sampling", fig)
+
+
+def save_station_splits():
+    num_val_stations = 50
+
+    dwd = DWDSTationData(paths)
+    gdf = dwd.full().groupby(names.station_id).first()
+    station_ids = gdf.index.get_level_values(names.station_id).sort_values()
+    sdf = pd.DataFrame(index=station_ids)
+    sdf["SET"] = None
+    sdf["ORDER"] = 0
+
+    test_station_ids = get_test_station_ids()
+
+    # Define test stations.
+    sdf.loc[list(test_station_ids), "SET"] = "TEST"
+    # Remove test stations from the pool.
+    station_ids = set(station_ids) - set(test_station_ids)
+
+    # Define validation stations.
+    gdf = gdf.query(f"{names.station_id} in @station_ids")
+    dm = distance_matrix(gdf, gdf)
+    val_station_ids = pick_stations([next(iter(station_ids))], dm, num_val_stations - 1)
+    sdf.loc[val_station_ids, "SET"] = "VAL"
+    sdf.loc[val_station_ids, "ORDER"] = list(range(len(val_station_ids)))
+
+    # Remove val stations from the pool.
+    station_ids = station_ids - set(val_station_ids)
+    gdf = gdf.query(f"{names.station_id} in @station_ids")
+
+    # Define train stations.
+    dm = distance_matrix(gdf, gdf)
+    num_train_stations = len(station_ids)
+    train_station_ids = pick_stations(
+        [next(iter(station_ids))], dm, num_train_stations - 1
+    )
+    sdf.loc[train_station_ids, "SET"] = "TRAIN"
+    sdf.loc[train_station_ids, "ORDER"] = list(range(len(train_station_ids)))
+    sdf = sdf.reset_index()
+
+    ensure_dir_exists(paths.station_split)
+    sdf.to_feather(paths.station_split)
+
+
+def save_datetime_splits():
+    full = DWDSTationData(paths).full()
+    dts = full.index.get_level_values(names.time).unique()
+    train_dts, val_dts, test_dts = train_val_test_dts(dts)
+    df = pd.DataFrame(index=dts.sort_values())
+    df["SET"] = None
+    df.loc[train_dts] = "TRAIN"
+    df.loc[val_dts] = "VAL"
+    df.loc[test_dts] = "TEST"
+    df = df.reset_index()
+    ensure_dir_exists(paths.time_split)
+    df.to_feather(paths.time_split)
+
+
 if __name__ == "__main__":
-    # download_dwd()
-    # process_dwd()
     process_value_stations()
+    # save_station_splits()
+    # datetime_split_plot()
+    save_datetime_splits()

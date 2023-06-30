@@ -97,7 +97,7 @@ def plot_geopandas(
     return fig, ax
 
 
-def init_fig(nrows=1, ncols=1, figsize=(4, 4)):
+def init_fig(nrows=1, ncols=1, figsize=(4, 4), ret_transform=False):
     """
     Generate a figure configured with a basic map of germany.
     """
@@ -114,6 +114,8 @@ def init_fig(nrows=1, ncols=1, figsize=(4, 4)):
         ax.add_feature(feature.BORDERS, linewidth=0.25)
         ax.coastlines(linewidth=0.25)
 
+    if ret_transform:
+        return fig, axs, ccrs.PlateCarree()
     return fig, axs
 
 

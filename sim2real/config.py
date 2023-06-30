@@ -16,6 +16,8 @@ class Paths:
     era5: str
     raw_srtm: str
     srtm: str
+    station_split: str
+    time_split: str
     out: str
 
 
@@ -125,6 +127,8 @@ paths = Paths(
     era5=f"{root}/data/processed/era5/era5_small.nc",
     raw_srtm=f"{root}/data/raw/srtm_dem/srtm_germany_dtm.tif",
     srtm=f"{root}/data/processed/srtm_dem/srtm_germany_dtm.nc",
+    station_split=f"{root}/data/processed/splits/stations.feather",
+    time_split=f"{root}/data/processed/splits/times.feather",
     out=f"{root}/_outputs",
 )
 
@@ -139,7 +143,7 @@ data = DataSpec(
     # of day are covered.
     val_freq="39H",
     era5_context=(5, 30),
-    era5_target="all",
+    era5_target=100,
     dwd_context=(5, 50),
     dwd_target="all",
     # How much more dense should the elevation data
@@ -150,12 +154,12 @@ data = DataSpec(
 
 opt = OptimSpec(
     seed=42,
-    device="cuda",
+    device="cpu",
     batch_size=16,
-    batch_size_val=128,
-    batches_per_epoch=200,
+    batch_size_val=512,
+    batches_per_epoch=10,
     num_epochs=200,
-    lr=3e-5,
+    lr=1e-4,
     start_from=None,  # None, "best", "latest"
     scheduler_patience=5,
     early_stop_patience=15,
@@ -163,10 +167,10 @@ opt = OptimSpec(
 )
 
 model = ModelSpec(
-    unet_channels=(96,) * 6,
+    unet_channels=(128,) * 3,
     dim_yt=1,
     dim_yc=(1, 7),
-    ppu=200,  # Found from dwd.compute_ppu()
+    ppu=40,  # Found from dwd.compute_ppu()
     film=True,
     freeze_film=True,
     likelihood="het",
@@ -175,7 +179,7 @@ model = ModelSpec(
 )
 
 out = OutputSpec(
-    wandb=True,
+    wandb=False,
     plots=True,
     wandb_name=None,
     fig_crs=ccrs.TransverseMercator(central_longitude=10, approx=False),
