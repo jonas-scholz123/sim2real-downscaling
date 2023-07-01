@@ -69,6 +69,11 @@ class Names:
     station_name: str
     station_id: str
     time: str
+    train: str
+    val: str
+    test: str
+    set: str
+    order: str
 
 
 @dataclass
@@ -103,6 +108,9 @@ class TunerType(Enum):
 class TuneSpec:
     tuner: TunerType
     num_stations: int
+    num_tasks: int
+    val_frac_stations: float
+    val_frac_times: float
 
 
 names = Names(
@@ -113,6 +121,11 @@ names = Names(
     station_name="STATION_NAME",
     station_id="STATION_ID",
     time="TIME",
+    train="TRAIN",
+    val="VAL",
+    test="TEST",
+    set="SET",
+    order="ORDER",
 )
 
 root = str(Path(__file__).parent.parent.resolve())
@@ -186,4 +199,10 @@ out = OutputSpec(
     data_crs=ccrs.PlateCarree(),
 )
 
-tune = TuneSpec(tuner=TunerType.naive, num_stations=300)
+tune = TuneSpec(
+    tuner=TunerType.naive,
+    num_stations=50,
+    num_tasks=1024,
+    val_frac_stations=0.2,
+    val_frac_times=0.2,
+)

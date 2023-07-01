@@ -18,6 +18,7 @@ from scipy.spatial.distance import cdist
 from sim2real.config import Paths, paths, names, data
 from sim2real.gridder import Gridder
 from sim2real.utils import get_default_data_processor
+import sim2real.plots as plots
 
 
 class QualityCode(Enum):
@@ -155,7 +156,7 @@ class DWDSTationData:
         # remainder:
         np.random.seed(seed)
         meta_remainder = self.meta_df.query(
-            f"{names.station_id} not in @test_station_ids"
+            f"{names.station_id} not in @eval_station_ids"
         )
 
         station_ids = meta_remainder["STATION_ID"].unique()
@@ -263,6 +264,15 @@ class DWDSTationData:
         dists = grouped.apply(smallest_distance)
         ppu = 1 / dists.min()
         return ppu
+
+    def plot_stations(self, station_ids):
+        _, axs, transform = plots.init_fig(ret_transform=True)
+
+        gdf = self.meta_df.query(f"{names.station_id} in @station_ids")
+        gdf = gdf.groupby(names.station_id).last()
+        gdf.plot(
+            ax=axs[0], transform=transform, marker="o", facecolor="none", color="C0"
+        )
 
 
 def load_era5():

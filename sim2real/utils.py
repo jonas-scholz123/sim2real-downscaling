@@ -1,4 +1,6 @@
 import os
+from typing import Tuple
+import pandas as pd
 import torch
 from sim2real.config import TuneSpec, paths, ModelSpec, opt, names, data
 import numpy as np
@@ -81,3 +83,18 @@ def load_weights(model, path, loss_only=False):
         return (model, val_loss, state["epoch"])
     except (FileNotFoundError, KeyError):
         return model, float("inf"), 0
+
+
+def split(df, dts, station_ids) -> Tuple[pd.DataFrame]:
+    """
+    Split a dataframe by BOTH datetimes and station ids.
+
+    Returns: (split, remainder): pd.DataFrame
+    """
+
+    split = df.query(f"{names.station_id} in @station_ids and {names.time} in @dts")
+    remainder = df.query(
+        f"{names.station_id} not in @station_ids and {names.time} not in @dts"
+    )
+
+    return split, remainder

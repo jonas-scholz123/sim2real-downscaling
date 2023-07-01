@@ -26,8 +26,41 @@ from sim2real.config import (
 )
 from sim2real.train.taskset import Taskset
 from sim2real.train.trainer import Trainer
-from sim2real.utils import exp_dir_sim, exp_dir_sim2real, load_weights, weight_dir
-from sim2real.datasets import DWDSTationData, load_elevation
+from sim2real.utils import (
+    exp_dir_sim,
+    exp_dir_sim2real,
+    load_weights,
+    weight_dir,
+    split,
+)
+from sim2real.datasets import (
+    DWDSTationData,
+    load_elevation,
+    load_station_splits,
+    load_time_splits,
+)
+
+
+def sample_dates(time_split, set_name, num, seed=42):
+    """
+    Randomly sample num dates from time_split from the right set.
+    """
+    return (
+        time_split[time_split[names.set] == set_name]
+        .sample(num, random_state=seed)
+        .index.sort_values()
+    )
+
+
+def sample_stations(station_split, set_name, num):
+    """
+    Deterministically take the first num stations in a predefined order.
+    """
+    return list(
+        station_split[station_split[names.set] == set_name]
+        .sort_values(names.order)
+        .index[:num]
+    )
 
 
 class Sim2RealTrainer(Trainer):
@@ -41,11 +74,12 @@ class Sim2RealTrainer(Trainer):
         tspec: TuneSpec,
     ) -> None:
         self.dwd_raw = DWDSTationData(paths)
+        self.full = self.dwd_raw.full()
         self.val_frac = 0.2
         self.tspec = tspec
 
         super().__init__(paths, opt, out, data, mspec)
-        self._load_initial_weights()
+        # self._load_initial_weights()
 
     def _load_initial_weights(self):
         if self.loaded_checkpoint:
@@ -68,44 +102,60 @@ class Sim2RealTrainer(Trainer):
         print("Starting training from best pretrained.")
         self.loaded_checkpoint = True
 
+    def _to_deepsensor_df(self, df):
+        return df.reset_index().set_index([names.time, names.lat, names.lon])[
+            [names.temp]
+        ]
+
     def _get_exp_dir(self, mspec: ModelSpec):
         return exp_dir_sim2real(mspec, self.tspec)
 
-    def _dwd_to_taskset(
-        self, dwd: DWDSTationData, deterministic, set_task_loader=False
+    def gen_trainset(
+        self,
+        c_stations,
+        c_num,
+        t_stations,
+        t_num,
+        times,
+        set_task_loader: bool = False,
+        deterministic: bool = False,
     ):
-        # Add dwd data.
-        df = dwd.to_deepsensor_df()
-        context_points = [self.data.dwd_context]
-        target_points = [self.data.dwd_target]
+        c_df, _ = split(self.full, times, c_stations)
+        t_df, _ = split(self.full, times, t_stations)
+
+        c_df = self._to_deepsensor_df(c_df)
+        t_df = self._to_deepsensor_df(t_df)
+
+        # How many context/target points (i.e. stations) are used?
+        context_points = [c_num]
+        target_points = [t_num]
 
         # Add auxilliary data.
         aux, aux_context_points = self._add_aux()
         context_points.append(aux_context_points)
 
         # Normalise.
-        station_df, aux = self.data_processor([df, aux])
+        c_df, t_df, aux = self.data_processor([c_df, t_df, aux])
 
         # Add spatio-temporal data.
         x1x2_ds = construct_x1x2_ds(aux)
         aux["x1_arr"] = x1x2_ds["x1_arr"]
         aux["x2_arr"] = x1x2_ds["x2_arr"]
-        dts = df.index.get_level_values(names.time).unique()
-        dates = pd.date_range(dts.min(), dts.max(), freq="H")
+
+        # NOTE: Can't just use times variable because the index name is still un-processed.
+        dts = c_df.index.get_level_values("time").unique()
 
         # Day of year.
-        doy_ds = construct_circ_time_ds(dates, freq="D")
+        doy_ds = construct_circ_time_ds(dts, freq="D")
         aux["cos_D"] = doy_ds["cos_D"]
         aux["sin_D"] = doy_ds["sin_D"]
 
         # Time of day.
-        tod_ds = construct_circ_time_ds(dates, freq="H")
+        tod_ds = construct_circ_time_ds(dts, freq="H")
         aux["cos_H"] = tod_ds["cos_H"]
         aux["sin_H"] = tod_ds["sin_H"]
 
-        context = [station_df, aux]
-        target = station_df
-        tl = TaskLoader(context, target, links=[(0, 0)], time_freq="H")
+        tl = TaskLoader([c_df, aux], t_df, links=[(0, 0)], time_freq="H")
 
         if set_task_loader:
             # Need the task loader for inferring model etc.
@@ -116,17 +166,66 @@ class Sim2RealTrainer(Trainer):
             context_points,
             target_points,
             self.opt,
-            dts,
-            freq="H",
+            datetimes=dts,
             deterministic=deterministic,
         )
 
     def _init_tasksets(self) -> Tuple[Taskset, Taskset, Taskset]:
-        train, val, test = self.dwd_raw.train_val_test_split(self.val_frac)
-        # TODO: Specify model manually for more control. This might lead to bad PPU otherwise.
-        train = self._dwd_to_taskset(train, False, set_task_loader=True)
-        val = self._dwd_to_taskset(val, True)
-        test = self._dwd_to_taskset(test, True)
+        # Load all data.
+        time_split = load_time_splits()
+        stat_split = load_station_splits()
+
+        # Split our restricted data into train/val sets.
+        # n = num stations, m = num_times/num_tasks
+        n_all = tune.num_stations
+        n_val = int(tune.val_frac_stations * n_all)
+        n_train = n_all - n_val
+
+        m_all = tune.num_tasks
+        m_val = int(tune.val_frac_times * m_all)
+        m_train = m_all - m_val
+
+        train_dates = sample_dates(time_split, names.train, m_train)
+        val_dates = sample_dates(time_split, names.val, m_val)
+        test_dates = time_split[time_split[names.set] == names.test].index
+
+        train_stations = sample_stations(stat_split, names.train, n_train)
+        val_stations = sample_stations(stat_split, names.val, n_val)
+
+        # 1000 -> all stations labelled "TEST".
+        test_stations = sample_stations(stat_split, names.test, 1000)
+
+        train = self.gen_trainset(
+            train_stations,
+            self.data.dwd_context,
+            train_stations,
+            self.data.dwd_target,
+            train_dates,
+            set_task_loader=True,
+            deterministic=False,
+        )
+
+        val = self.gen_trainset(
+            train_stations,
+            "all",
+            val_stations,
+            "all",
+            val_dates,
+            set_task_loader=False,
+            deterministic=True,
+        )
+
+        test = self.gen_trainset(
+            train_stations + val_stations,
+            "all",
+            test_stations,
+            "all",
+            test_dates,
+            # TODO: Change
+            set_task_loader=False,
+            deterministic=True,
+        )
+
         return train, val, test
 
     def _add_aux(self) -> Tuple[Union[xr.DataArray, pd.Series], Union[float, int, str]]:
@@ -137,9 +236,8 @@ class Sim2RealTrainer(Trainer):
             factor = self.data.aux_coarsen_factor * len(high_res) // len(low_res)
             return int(factor)
 
-        idx = self.dwd_raw.to_deepsensor_df().index
-        lats = idx.get_level_values(names.lat).unique()
-        lons = idx.get_level_values(names.lon).unique()
+        lats = self.full[names.lat].unique()
+        lons = self.full[names.lon].unique()
 
         aux = load_elevation()
         coarsen = {
@@ -155,6 +253,5 @@ class Sim2RealTrainer(Trainer):
 
 if __name__ == "__main__":
     s2r = Sim2RealTrainer(paths, opt, out, data, model, tune)
-    # s2r.context_target_plot()
     s2r.plot_example_task()
-    s2r.train()
+    # s2r.train()

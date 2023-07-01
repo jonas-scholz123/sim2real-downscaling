@@ -12,20 +12,13 @@ from deepsensor.data.utils import (
     construct_x1x2_ds,
     construct_circ_time_ds,
 )
-from deepsensor.data.processor import DataProcessor
 from deepsensor.data.loader import TaskLoader
-from deepsensor.plot import context_encoding, offgrid_context
 
 from sim2real.utils import exp_dir_sim
 
-from sim2real import keys, utils
 from sim2real.datasets import load_elevation, load_era5
-from sim2real.plots import save_plot, init_fig
-from sim2real.modules import convcnp
 from sim2real.train.taskset import Taskset
 from sim2real.train.trainer import Trainer
-import cartopy.crs as ccrs
-import cartopy.feature as feature
 
 from sim2real.config import (
     DataSpec,
