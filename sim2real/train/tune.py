@@ -79,7 +79,7 @@ class Sim2RealTrainer(Trainer):
         self.tspec = tspec
 
         super().__init__(paths, opt, out, data, mspec)
-        # self._load_initial_weights()
+        self._load_initial_weights()
 
     def _load_initial_weights(self):
         if self.loaded_checkpoint:
@@ -132,6 +132,7 @@ class Sim2RealTrainer(Trainer):
 
         # Add auxilliary data.
         aux, aux_context_points = self._add_aux()
+        self.raw_aux = aux
         context_points.append(aux_context_points)
 
         # Normalise.
@@ -195,13 +196,14 @@ class Sim2RealTrainer(Trainer):
         # 1000 -> all stations labelled "TEST".
         test_stations = sample_stations(stat_split, names.test, 1000)
 
+        # TODO: Think abt set_task_loader
         train = self.gen_trainset(
             train_stations,
             self.data.dwd_context,
             train_stations,
             self.data.dwd_target,
             train_dates,
-            set_task_loader=True,
+            set_task_loader=False,
             deterministic=False,
         )
 
@@ -211,7 +213,7 @@ class Sim2RealTrainer(Trainer):
             val_stations,
             "all",
             val_dates,
-            set_task_loader=False,
+            set_task_loader=True,
             deterministic=True,
         )
 
@@ -247,10 +249,11 @@ class Sim2RealTrainer(Trainer):
         return aux, "all"
 
     def _plot_X_t(self):
-        return self.dwd_raw.df
+        return self.raw_aux
 
 
 if __name__ == "__main__":
     s2r = Sim2RealTrainer(paths, opt, out, data, model, tune)
-    s2r.plot_example_task()
-    # s2r.train()
+    s2r.plot_prediction()
+    # s2r.plot_example_task()
+    s2r.train()

@@ -100,7 +100,7 @@ class Trainer(ABC):
         self._init_dataloaders()
         self._init_model()
 
-        self.test_tasks = [self.test_set[0]]
+        self.sample_tasks = [self.val_set[0], self.val_set[1]]
 
     @abstractmethod
     def _get_exp_dir(self, mspec: ModelSpec):
@@ -120,7 +120,7 @@ class Trainer(ABC):
         return
 
     def _init_dataloaders(self):
-        self.train_set, self.cv_set, self.test_set = self._init_tasksets()
+        self.train_set, self.val_set, self.test_set = self._init_tasksets()
 
         if self.opt.device == "cuda":
             gen = torch.Generator(device="cuda")
@@ -138,7 +138,7 @@ class Trainer(ABC):
         )
 
         self.cv_loader = DataLoader(
-            self.cv_set,
+            self.val_set,
             shuffle=False,
             batch_size=self.opt.batch_size_val,
             collate_fn=collate_fn,
@@ -358,7 +358,7 @@ class Trainer(ABC):
         plt.gca().set_global()
 
     def plot_example_task(self):
-        fig = context_encoding(self.model, self.test_tasks[0], self.task_loader)
+        fig = context_encoding(self.model, self.sample_tasks[0], self.task_loader)
         save_plot(self.exp_dir, "example_task_model_inputs", fig)
 
     def context_target_plot(self):
@@ -367,7 +367,7 @@ class Trainer(ABC):
 
         offgrid_context(
             ax,
-            self.test_tasks[0],
+            self.sample_tasks[0],
             self.data_processor,
             self.task_loader,
             plot_target=True,
@@ -386,10 +386,9 @@ class Trainer(ABC):
         """
         return
 
-    def plot_prediction(self, name=None, date="2022-01-01", task=None):
+    def plot_prediction(self, name=None, task=None):
         if task is None:
-            test_date = pd.Timestamp(date)
-            task = self.task_loader(test_date, context_sampling=(30, "all"))
+            task = self.sample_tasks[0]
 
         mean_ds, std_ds = self.model.predict(task, X_t=self._plot_X_t())
 
