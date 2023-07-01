@@ -221,7 +221,6 @@ class Sim2RealTrainer(Trainer):
             test_stations,
             "all",
             test_dates,
-            # TODO: Change
             set_task_loader=False,
             deterministic=True,
         )
