@@ -371,7 +371,8 @@ class Trainer(ABC):
                     self.plot_prediction(name=f"epoch_{epoch}_test", task=task)
                 try:
                     batch_loss = self.train_on_batch(task)
-                except:
+                except Exception as e:
+                    print(e)
                     if self.out.plots:
                         self.plot_prediction(
                             name=f"epoch_{epoch}_test_broken", task=task

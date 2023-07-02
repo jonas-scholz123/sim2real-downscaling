@@ -1,4 +1,5 @@
 # %%
+import copy
 from typing import Tuple, Union
 import xarray as xr
 import pandas as pd
@@ -48,9 +49,6 @@ from sim2real.datasets import (
     load_station_splits,
     load_time_splits,
 )
-
-
-# %%
 
 
 def sample_dates(time_split, set_name, num, seed=42):
@@ -273,6 +271,8 @@ class Sim2RealTrainer(Trainer):
     def plot_prediction(self, name=None, task=None):
         if task is None:
             task = self.sample_tasks[0]
+        else:
+            task = copy.deepcopy(task)
 
         truth = self.get_truth(task["time"])
 
