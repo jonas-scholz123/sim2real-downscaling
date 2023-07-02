@@ -214,4 +214,4 @@ class SimTrainer(Trainer):
 
 if __name__ == "__main__":
     s = SimTrainer(paths, opt, out, data, model)
-     s.train()
+    s.train()
