@@ -2,11 +2,18 @@
 from typing import Tuple, Union
 import xarray as xr
 import pandas as pd
+import geopandas as gpd
+import cartopy.crs as ccrs
+import cartopy.feature as feature
+import matplotlib.pyplot as plt
+import matplotlib as mpl
+from functools import cache
 
 from deepsensor.data.loader import TaskLoader
 from deepsensor.data.processor import DataProcessor
 import deepsensor.torch
 from deepsensor.data.utils import construct_x1x2_ds, construct_circ_time_ds
+from deepsensor.plot import offgrid_context
 
 
 from sim2real.config import (
@@ -32,13 +39,18 @@ from sim2real.utils import (
     load_weights,
     weight_dir,
     split,
+    ensure_exists,
 )
+from sim2real.plots import save_plot
 from sim2real.datasets import (
     DWDSTationData,
     load_elevation,
     load_station_splits,
     load_time_splits,
 )
+
+
+# %%
 
 
 def sample_dates(time_split, set_name, num, seed=42):
@@ -176,6 +188,9 @@ class Sim2RealTrainer(Trainer):
         time_split = load_time_splits()
         stat_split = load_station_splits()
 
+        self.time_split = time_split
+        self.stat_split = stat_split
+
         # Split our restricted data into train/val sets.
         # n = num stations, m = num_times/num_tasks
         n_all = tune.num_stations
@@ -227,6 +242,10 @@ class Sim2RealTrainer(Trainer):
             deterministic=True,
         )
 
+        self.train_stations = train_stations
+        self.val_stations = val_stations
+        self.test_stations = test_stations
+
         return train, val, test
 
     def _add_aux(self) -> Tuple[Union[xr.DataArray, pd.Series], Union[float, int, str]]:
@@ -251,9 +270,119 @@ class Sim2RealTrainer(Trainer):
     def _plot_X_t(self):
         return self.raw_aux
 
+    def plot_prediction(self, name=None, task=None):
+        if task is None:
+            task = self.sample_tasks[0]
+
+        truth = self.get_truth(task["time"])
+
+        mean_ds, std_ds = self.model.predict(task, X_t=truth)
+        # Fix rounding errors along dimensions.
+        err_da = mean_ds[names.temp] - truth[names.temp]
+
+        mean_ds, std_ds = self.model.predict(
+            task, X_t=self.raw_aux, resolution_factor=0.1
+        )
+
+        proj = ccrs.TransverseMercator(central_longitude=10, approx=False)
+
+        fig, axs = plt.subplots(
+            subplot_kw={"projection": proj},
+            nrows=1,
+            ncols=4,
+            figsize=(10, 2.5),
+        )
+
+        transform = ccrs.PlateCarree()
+        vmin, vmax = 0.9 * truth[names.temp].min(), 1.1 * truth[names.temp].max()
+
+        lats = truth.index.get_level_values(names.lat)
+        lons = truth.index.get_level_values(names.lon)
+
+        s = 3**2
+
+        cmap = mpl.cm.get_cmap("seismic")
+
+        axs[0].set_title("Truth")
+        im = axs[0].scatter(
+            lons,
+            lats,
+            s=s,
+            c=truth[names.temp],
+            transform=transform,
+            vmin=vmin,
+            vmax=vmax,
+            cmap=cmap,
+        )
+        fig.colorbar(im, ax=axs[0])
+
+        im = mean_ds[names.temp].plot(
+            cmap=cmap,
+            ax=axs[1],
+            transform=transform,
+            vmin=vmin,
+            vmax=vmax,
+            extend="both",
+        )
+        axs[1].set_title("ConvNP mean")
+
+        im = std_ds[names.temp].plot(
+            cmap="Greys",
+            ax=axs[2],
+            transform=transform,
+            extend="both",
+            vmin=0,
+            vmax=5,
+        )
+        axs[2].set_title("ConvNP std dev")
+
+        axs[3].set_title("ConvNP error")
+        im = axs[3].scatter(
+            lons,
+            lats,
+            s=s,
+            c=err_da,
+            cmap=cmap,
+            vmin=0,
+            transform=transform,
+        )
+        fig.colorbar(im, ax=axs[3])
+
+        offgrid_context(
+            axs,
+            task,
+            self.data_processor,
+            s=3**2,
+            linewidths=0.5,
+            add_legend=False,
+            transform=ccrs.PlateCarree(),
+        )
+
+        bounds = [*self.data.bounds.lon, *self.data.bounds.lat]
+        for ax in axs:
+            ax.set_extent(bounds, crs=transform)
+            ax.add_feature(feature.BORDERS, linewidth=0.25)
+            ax.coastlines(linewidth=0.25)
+
+        if name is not None:
+            ensure_exists(self.paths.out)
+            save_plot(self.exp_dir, name, fig)
+        else:
+            plt.show()
+
+        plt.close()
+        plt.clf()
+
+    @cache
+    def get_truth(self, dt):
+        df = self.dwd_raw.at_datetime(dt).loc[dt]
+        val_stations = self.val_stations
+        df = df.query(f"{names.station_id} in @val_stations")
+        df = df.reset_index()[[names.lat, names.lon, "geometry", names.temp]]
+        df = df.set_index([names.lat, names.lon])
+        return df
+
 
 if __name__ == "__main__":
     s2r = Sim2RealTrainer(paths, opt, out, data, model, tune)
-    s2r.plot_prediction()
-    # s2r.plot_example_task()
-    s2r.train()
+    s2r.overfit_train()

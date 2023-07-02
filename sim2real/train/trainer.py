@@ -188,7 +188,7 @@ class Trainer(ABC):
             task_losses.append(self.model.loss_fn(task, normalise=True))
         mean_batch_loss = B.mean(torch.stack(task_losses))
         mean_batch_loss.backward()
-        torch.nn.utils.clip_grad_norm_(self.model.model.parameters(), 0.01)
+        # torch.nn.utils.clip_grad_norm_(self.model.model.parameters(), 0.01)
 
         self.optimiser.step()
         l = float(mean_batch_loss.detach().cpu().numpy())
@@ -347,6 +347,45 @@ class Trainer(ABC):
                 }
             )
 
+    def overfit_train(self):
+        """
+        Overfit to just one task to see if the model works.
+        """
+        epoch_losses = []
+
+        self.optimiser = optim.Adam(self.model.model.parameters(), lr=self.opt.lr)
+
+        self.pbar = tqdm(range(self.start_epoch, self.opt.num_epochs + 1))
+
+        if self.start_epoch == 1:
+            val_loss = self.evaluate()
+            self._log(0, val_loss, val_loss)
+
+        for epoch in self.pbar:
+            batch_losses = []
+            for i in range(self.opt.batches_per_epoch):
+                date = self.val_set.times[0]
+                test_date = pd.Timestamp(date)
+                task = self.task_loader(test_date, context_sampling=("all", "all"))
+                if i == 0 and self.out.plots:
+                    self.plot_prediction(name=f"epoch_{epoch}_test", task=task)
+                try:
+                    batch_loss = self.train_on_batch(task)
+                except:
+                    if self.out.plots:
+                        self.plot_prediction(
+                            name=f"epoch_{epoch}_test_broken", task=task
+                        )
+                    return
+
+                batch_losses.append(batch_loss)
+
+            train_loss = np.mean(batch_losses)
+            epoch_losses.append(train_loss)
+            val_lik = self.evaluate()
+            self._log(epoch, train_loss, val_lik)
+            self._save_weights(epoch, val_lik)
+
     def plot_receptive_field(self):
         receptive_field(
             self.model.model.receptive_field,
@@ -357,8 +396,10 @@ class Trainer(ABC):
 
         plt.gca().set_global()
 
-    def plot_example_task(self):
-        fig = context_encoding(self.model, self.sample_tasks[0], self.task_loader)
+    def plot_example_task(self, task=None):
+        if task is None:
+            task = self.sample_tasks[0]
+        fig = context_encoding(self.model, task, self.task_loader)
         save_plot(self.exp_dir, "example_task_model_inputs", fig)
 
     def context_target_plot(self):
@@ -386,72 +427,6 @@ class Trainer(ABC):
         """
         return
 
+    @abstractmethod
     def plot_prediction(self, name=None, task=None):
-        if task is None:
-            task = self.sample_tasks[0]
-
-        mean_ds, std_ds = self.model.predict(task, X_t=self._plot_X_t())
-
-        coord_map = {
-            names.lat: self.var_raw[names.lat],
-            names.lon: self.var_raw[names.lon],
-        }
-
-        # Fix rounding errors along dimensions.
-        mean_ds = mean_ds.assign_coords(coord_map)
-        std_ds = std_ds.assign_coords(coord_map)
-        err_da = mean_ds[names.temp] - self.var_raw
-
-        proj = ccrs.TransverseMercator(central_longitude=10, approx=False)
-
-        fig, axs = plt.subplots(
-            subplot_kw={"projection": proj}, nrows=1, ncols=4, figsize=(10, 2.5)
-        )
-
-        sel = {names.time: task["time"]}
-
-        era5_plot = self.var_raw.sel(sel).plot(
-            cmap="seismic", ax=axs[0], transform=ccrs.PlateCarree()
-        )
-        cbar = era5_plot.colorbar
-        vmin, vmax = cbar.vmin, cbar.vmax
-
-        axs[0].set_title("ERA5")
-        mean_ds[names.temp].sel(sel).plot(
-            cmap="seismic",
-            ax=axs[1],
-            transform=ccrs.PlateCarree(),
-            vmin=vmin,
-            vmax=vmax,
-        )
-        axs[1].set_title("ConvNP mean")
-        std_ds[names.temp].sel(sel).plot(
-            cmap="Greys", ax=axs[2], transform=ccrs.PlateCarree()
-        )
-        axs[2].set_title("ConvNP std dev")
-        err_da.sel(sel).plot(cmap="seismic", ax=axs[3], transform=ccrs.PlateCarree())
-        axs[3].set_title("ConvNP error")
-        offgrid_context(
-            axs,
-            task,
-            self.data_processor,
-            s=3**2,
-            linewidths=0.5,
-            add_legend=False,
-            transform=ccrs.PlateCarree(),
-        )
-
-        bounds = [*self.data.bounds.lon, *self.data.bounds.lat]
-        for ax in axs:
-            ax.set_extent(bounds, crs=ccrs.PlateCarree())
-            ax.add_feature(feature.BORDERS, linewidth=0.25)
-            ax.coastlines(linewidth=0.25)
-
-        if name is not None:
-            ensure_exists(self.paths.out)
-            save_plot(self.exp_dir, name, fig)
-        else:
-            plt.show()
-
-        plt.close()
-        plt.clf()
+        return

@@ -6,6 +6,8 @@ import torch.optim as optim
 from tqdm import tqdm
 import numpy as np
 from typing import Tuple, Union
+import cartopy.crs as ccrs
+import cartopy.feature as feature
 
 import deepsensor.torch
 from deepsensor.data.utils import (
@@ -13,8 +15,10 @@ from deepsensor.data.utils import (
     construct_circ_time_ds,
 )
 from deepsensor.data.loader import TaskLoader
+from deepsensor.plot import offgrid_context
 
-from sim2real.utils import exp_dir_sim
+from sim2real.utils import exp_dir_sim, ensure_exists
+from sim2real.plots import save_plot
 
 from sim2real.datasets import load_elevation, load_era5
 from sim2real.train.taskset import Taskset
@@ -137,45 +141,77 @@ class SimTrainer(Trainer):
     def _plot_X_t(self):
         return self.var_raw
 
-    def overfit_train(self):
-        """
-        Overfit to just one task to see if the model works.
-        """
-        epoch_losses = []
+    def plot_prediction(self, name=None, task=None):
+        if task is None:
+            task = self.sample_tasks[0]
 
-        self.optimiser = optim.Adam(self.model.model.parameters(), lr=self.opt.lr)
+        mean_ds, std_ds = self.model.predict(task, X_t=self._plot_X_t())
 
-        self.pbar = tqdm(range(self.start_epoch, self.opt.num_epochs + 1))
+        coord_map = {
+            names.lat: self.var_raw[names.lat],
+            names.lon: self.var_raw[names.lon],
+        }
 
-        if self.start_epoch == 1:
-            val_loss = self.evaluate()
-            self._log(0, val_loss, val_loss)
+        # Fix rounding errors along dimensions.
+        mean_ds = mean_ds.assign_coords(coord_map)
+        std_ds = std_ds.assign_coords(coord_map)
+        err_da = mean_ds[names.temp] - self.var_raw
 
-        for epoch in self.pbar:
-            batch_losses = []
-            for i in range(self.opt.batches_per_epoch):
-                date = "2012-01-01"
-                test_date = pd.Timestamp(date)
-                task = self.task_loader(test_date, context_sampling=("all", "all"))
-                if i == 0:
-                    self.plot_prediction(name=f"epoch_{epoch}_test", task=task)
-                try:
-                    batch_loss = self.train_on_batch(task)
-                except:
-                    self.plot_prediction(name=f"epoch_{epoch}_test_broken", task=task)
-                    return
+        proj = ccrs.TransverseMercator(central_longitude=10, approx=False)
 
-                batch_losses.append(batch_loss)
+        fig, axs = plt.subplots(
+            subplot_kw={"projection": proj}, nrows=1, ncols=4, figsize=(10, 2.5)
+        )
 
-            train_loss = np.mean(batch_losses)
-            epoch_losses.append(train_loss)
-            val_lik = self.evaluate()
-            self._log(epoch, train_loss, val_lik)
-            self._save_weights(epoch, val_lik)
+        sel = {names.time: task["time"]}
+
+        era5_plot = self.var_raw.sel(sel).plot(
+            cmap="seismic", ax=axs[0], transform=ccrs.PlateCarree()
+        )
+        cbar = era5_plot.colorbar
+        vmin, vmax = cbar.vmin, cbar.vmax
+
+        axs[0].set_title("ERA5")
+        mean_ds[names.temp].sel(sel).plot(
+            cmap="seismic",
+            ax=axs[1],
+            transform=ccrs.PlateCarree(),
+            vmin=vmin,
+            vmax=vmax,
+        )
+        axs[1].set_title("ConvNP mean")
+        std_ds[names.temp].sel(sel).plot(
+            cmap="Greys", ax=axs[2], transform=ccrs.PlateCarree()
+        )
+        axs[2].set_title("ConvNP std dev")
+        err_da.sel(sel).plot(cmap="seismic", ax=axs[3], transform=ccrs.PlateCarree())
+        axs[3].set_title("ConvNP error")
+        offgrid_context(
+            axs,
+            task,
+            self.data_processor,
+            s=3**2,
+            linewidths=0.5,
+            add_legend=False,
+            transform=ccrs.PlateCarree(),
+        )
+
+        bounds = [*self.data.bounds.lon, *self.data.bounds.lat]
+        for ax in axs:
+            ax.set_extent(bounds, crs=ccrs.PlateCarree())
+            ax.add_feature(feature.BORDERS, linewidth=0.25)
+            ax.coastlines(linewidth=0.25)
+
+        if name is not None:
+            ensure_exists(self.paths.out)
+            save_plot(self.exp_dir, name, fig)
+        else:
+            plt.show()
+
+        plt.close()
+        plt.clf()
 
 
 if __name__ == "__main__":
     s = SimTrainer(paths, opt, out, data, model)
-    # s.plot_example_task()
-    # s.context_target_plot()
-    s.train()
+     s.train()
