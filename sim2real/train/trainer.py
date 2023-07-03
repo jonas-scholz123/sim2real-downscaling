@@ -15,7 +15,7 @@ import numpy as np
 from dataclasses import asdict
 from deepsensor import context_encoding
 from deepsensor.data.loader import TaskLoader
-from deepsensor.model.models import ConvNP
+from deepsensor.model.convnp import ConvNP
 from deepsensor.plot import receptive_field, offgrid_context
 from sim2real.train.taskset import Taskset
 
@@ -330,8 +330,9 @@ class Trainer(ABC):
                 "data": asdict(self.data),
                 "model": asdict(self.mspec),
             }
+            name = self.out.wandb_name or self.wandb_name
             self.wandb = wandb.init(
-                project="climate-sim2real", config=config, name=self.out.wandb_name
+                project="climate-sim2real", config=config, name=name
             )
 
     def _log(self, epoch, train_loss, val_loss):
