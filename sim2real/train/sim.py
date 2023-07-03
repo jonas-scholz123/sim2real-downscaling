@@ -48,6 +48,7 @@ class SimTrainer(Trainer):
         data: DataSpec,
         mspec: ModelSpec,
     ) -> None:
+        self.wandb_name = f"{tspec.tuner} N_stat={self.tspec.num_stations} N_tasks={self.tspec.num_tasks}"
         super().__init__(paths, opt, out, data, mspec)
 
     def _get_data(self):

@@ -89,6 +89,8 @@ class Sim2RealTrainer(Trainer):
         self.val_frac = 0.2
         self.tspec = tspec
 
+        self.wandb_name = f"{tspec.tuner} N_stat={self.tspec.num_stations} N_tasks={self.tspec.num_tasks}"
+
         super().__init__(paths, opt, out, data, mspec)
         self._load_initial_weights()
 
