@@ -135,13 +135,14 @@ class SimTrainer(Trainer):
             names.lat: _coarsen(aux[names.lat], self.var_raw[names.lat]),
             names.lon: _coarsen(aux[names.lon], self.var_raw[names.lon]),
         }
+        print(coarsen)
         aux = aux.coarsen(coarsen, boundary="trim").mean()
         return aux, "all"
 
     def _plot_X_t(self):
         return self.var_raw
 
-    def plot_prediction(self, name=None, task=None):
+    def plot_prediction(self, task=None, name=None):
         if task is None:
             task = self.sample_tasks[0]
 
@@ -214,4 +215,9 @@ class SimTrainer(Trainer):
 
 if __name__ == "__main__":
     s = SimTrainer(paths, opt, out, data, model)
-    s.train()
+
+    for t in s.sample_tasks:
+        # s.plot_prediction(t)
+        s.plot_example_task()
+
+    # s.train()

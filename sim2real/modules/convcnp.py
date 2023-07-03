@@ -1,3 +1,4 @@
+from pprint import pprint
 import torch
 from deepsensor.data.loader import TaskLoader
 from deepsensor.model.defaults import gen_encoder_scales, gen_ppu

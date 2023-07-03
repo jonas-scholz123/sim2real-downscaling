@@ -9,6 +9,7 @@ import cartopy.feature as feature
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 from functools import cache
+import torch
 
 from deepsensor.data.loader import TaskLoader
 from deepsensor.data.processor import DataProcessor
@@ -96,9 +97,20 @@ class Sim2RealTrainer(Trainer):
             # We've loaded a Sim2Real checkpoint and don't need anything further.
             return
 
+        # We have to keep track of current length-scales.
+        l0 = torch.nn.Parameter(
+            self.model.model.encoder.coder[2][0].log_scale.clone(),
+            requires_grad=self.mspec.encoder_scales_learnable,
+        )
+        l1 = torch.nn.Parameter(
+            self.model.model.encoder.coder[2][1].log_scale.clone(),
+            requires_grad=self.mspec.encoder_scales_learnable,
+        )
+
         sim_exp_dir = exp_dir_sim(self.mspec)
         pretrained_path = f"{weight_dir(sim_exp_dir)}/best.h5"
 
+        print(f"Loading best pre-trained weights from: {pretrained_path}.")
         # We need to load the best pretrained model weights.
         self.model.model, self.best_val_loss, self.start_epoch = load_weights(
             self.model.model, pretrained_path
@@ -109,7 +121,11 @@ class Sim2RealTrainer(Trainer):
                 "Could not load appropriate pre-trained weights for this model configuration."
             )
 
-        print("Starting training from best pretrained.")
+        print(f"Resetting encoder length-scales to [{l0}, {l1}]")
+        self.model.model.encoder.coder[2][0].log_scale = l0
+        self.model.model.encoder.coder[2][1].log_scale = l1
+
+        self.start_epoch = 1
         self.loaded_checkpoint = True
 
     def _to_deepsensor_df(self, df):
@@ -247,41 +263,47 @@ class Sim2RealTrainer(Trainer):
         return train, val, test
 
     def _add_aux(self) -> Tuple[Union[xr.DataArray, pd.Series], Union[float, int, str]]:
-        def _coarsen(high_res, low_res):
+        def _coarsen(high_res):
             """
             Coarsen factor for shrinking something high-res to low-res.
             """
-            factor = self.data.aux_coarsen_factor * len(high_res) // len(low_res)
+            factor = self.data.aux_coarsen_factor * len(high_res) // self.mspec.ppu
             return int(factor)
-
-        lats = self.full[names.lat].unique()
-        lons = self.full[names.lon].unique()
 
         aux = load_elevation()
         coarsen = {
-            names.lat: _coarsen(aux[names.lat], lats),
-            names.lon: _coarsen(aux[names.lon], lons),
+            names.lat: _coarsen(aux[names.lat]),
+            names.lon: _coarsen(aux[names.lon]),
         }
+
         aux = aux.coarsen(coarsen, boundary="trim").mean()
         return aux, "all"
 
     def _plot_X_t(self):
         return self.raw_aux
 
-    def plot_prediction(self, name=None, task=None):
+    def plot_prediction(self, task=None, name=None):
+        def lons_and_lats(df):
+            lats = df.index.get_level_values(names.lat)
+            lons = df.index.get_level_values(names.lon)
+            return lons, lats
+
         if task is None:
             task = self.sample_tasks[0]
         else:
             task = copy.deepcopy(task)
 
+        # Get temperature at all stations on the task date.
         truth = self.get_truth(task["time"])
 
         mean_ds, std_ds = self.model.predict(task, X_t=truth)
         # Fix rounding errors along dimensions.
         err_da = mean_ds[names.temp] - truth[names.temp]
+        err_da = err_da.dropna()
 
+        # Higher resolution prediction everywhere.
         mean_ds, std_ds = self.model.predict(
-            task, X_t=self.raw_aux, resolution_factor=0.1
+            task, X_t=self.raw_aux, resolution_factor=self.data.aux_coarsen_factor
         )
 
         proj = ccrs.TransverseMercator(central_longitude=10, approx=False)
@@ -296,17 +318,13 @@ class Sim2RealTrainer(Trainer):
         transform = ccrs.PlateCarree()
         vmin, vmax = 0.9 * truth[names.temp].min(), 1.1 * truth[names.temp].max()
 
-        lats = truth.index.get_level_values(names.lat)
-        lons = truth.index.get_level_values(names.lon)
-
         s = 3**2
 
         cmap = mpl.cm.get_cmap("seismic")
 
         axs[0].set_title("Truth")
         im = axs[0].scatter(
-            lons,
-            lats,
+            *lons_and_lats(truth),
             s=s,
             c=truth[names.temp],
             transform=transform,
@@ -331,19 +349,19 @@ class Sim2RealTrainer(Trainer):
             ax=axs[2],
             transform=transform,
             extend="both",
-            vmin=0,
-            vmax=5,
         )
         axs[2].set_title("ConvNP std dev")
 
         axs[3].set_title("ConvNP error")
+
+        biggest_err = err_da.abs().max()
         im = axs[3].scatter(
-            lons,
-            lats,
+            *lons_and_lats(err_da),
             s=s,
             c=err_da,
             cmap=cmap,
-            vmin=0,
+            vmin=-biggest_err,
+            vmax=biggest_err,
             transform=transform,
         )
         fig.colorbar(im, ax=axs[3])
@@ -374,10 +392,11 @@ class Sim2RealTrainer(Trainer):
         plt.clf()
 
     @cache
-    def get_truth(self, dt):
+    def get_truth(self, dt, station_ids=None):
         df = self.dwd_raw.at_datetime(dt).loc[dt]
-        val_stations = self.val_stations
-        df = df.query(f"{names.station_id} in @val_stations")
+        if station_ids is not None:
+            val_stations = self.val_stations
+            df = df.query(f"{names.station_id} in @val_stations")
         df = df.reset_index()[[names.lat, names.lon, "geometry", names.temp]]
         df = df.set_index([names.lat, names.lon])
         return df
@@ -385,4 +404,4 @@ class Sim2RealTrainer(Trainer):
 
 if __name__ == "__main__":
     s2r = Sim2RealTrainer(paths, opt, out, data, model, tune)
-    s2r.overfit_train()
+    s2r.train()

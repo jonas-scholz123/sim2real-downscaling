@@ -82,6 +82,7 @@ class OutputSpec:
     plots: bool
     fig_crs: ccrs._CylindricalProjection
     data_crs: ccrs._CylindricalProjection
+    sample_dates: list
     wandb_name: str = None
 
 
@@ -162,7 +163,7 @@ data = DataSpec(
     # How much more dense should the elevation data
     # be compared to the era5 data? Smaller => more dense
     # aux data.
-    aux_coarsen_factor=1,
+    aux_coarsen_factor=0.8,
 )
 
 opt = OptimSpec(
@@ -170,7 +171,7 @@ opt = OptimSpec(
     device="cpu",
     batch_size=16,
     batch_size_val=512,
-    batches_per_epoch=10,
+    batches_per_epoch=50,
     num_epochs=200,
     lr=1e-4,
     start_from=None,  # None, "best", "latest"
@@ -180,7 +181,7 @@ opt = OptimSpec(
 )
 
 model = ModelSpec(
-    unet_channels=(128,) * 3,
+    unet_channels=(128,) * 4,
     dim_yt=1,
     dim_yc=(1, 7),
     ppu=40,  # Found from dwd.compute_ppu()
@@ -192,11 +193,13 @@ model = ModelSpec(
 )
 
 out = OutputSpec(
-    wandb=False,
+    wandb=True,
     plots=True,
     wandb_name=None,
     fig_crs=ccrs.TransverseMercator(central_longitude=10, approx=False),
     data_crs=ccrs.PlateCarree(),
+    # This doesn't work yet:
+    sample_dates=["2021-12-27 13:00:00", "2022-08-21 03:00:00"],
 )
 
 tune = TuneSpec(

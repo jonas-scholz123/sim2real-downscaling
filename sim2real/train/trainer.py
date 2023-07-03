@@ -100,7 +100,12 @@ class Trainer(ABC):
         self._init_dataloaders()
         self._init_model()
 
-        self.sample_tasks = [self.val_set[0], self.val_set[1]]
+        self.sample_tasks = self._init_sample_tasks()
+
+    def _init_sample_tasks(self):
+        idx = len(self.val_set) // 2
+        sample_tasks = [self.val_set[10], self.val_set[idx]]
+        return sample_tasks
 
     @abstractmethod
     def _get_exp_dir(self, mspec: ModelSpec):
@@ -238,9 +243,9 @@ class Trainer(ABC):
             self._log(epoch, train_loss, val_loss)
 
             if self.out.plots:
-                # TODO: move to config, child classes.
-                for date in ["2022-01-01", "2022-06-01"]:
-                    self.plot_prediction(name=f"epoch_{epoch}_{date}", date=date)
+                for task in self.sample_tasks:
+                    time = task["time"]
+                    self.plot_prediction(task=task, name=f"epoch_{epoch}_{time}")
 
             if self.early_stopper.early_stop(val_loss):
                 break
@@ -274,13 +279,13 @@ class Trainer(ABC):
             model.model, self.best_val_loss, self.start_epoch = load_weights(
                 model.model, self.best_path
             )
-            print("Loaded best weights.")
+            print(f"Loaded best weights from {self.best_path}.")
             self.loaded_checkpoint = True
         elif self.opt.start_from == "latest":
             model.model, self.best_val_loss, self.start_epoch = load_weights(
                 model.model, self.latest_path
             )
-            print("Loaded latest weights.")
+            print(f"Loaded latest weights from {self.latest_path}.")
             self.loaded_checkpoint = True
         else:
             print("Initialised random weights.")
@@ -429,5 +434,5 @@ class Trainer(ABC):
         return
 
     @abstractmethod
-    def plot_prediction(self, name=None, task=None):
+    def plot_prediction(self, task=None, name=None):
         return
