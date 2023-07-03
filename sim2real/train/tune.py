@@ -100,11 +100,11 @@ class Sim2RealTrainer(Trainer):
             return
 
         # We have to keep track of current length-scales.
-        l0 = torch.nn.Parameter(
+        el0 = torch.nn.Parameter(
             self.model.model.encoder.coder[2][0].log_scale.clone(),
             requires_grad=self.mspec.encoder_scales_learnable,
         )
-        l1 = torch.nn.Parameter(
+        el1 = torch.nn.Parameter(
             self.model.model.encoder.coder[2][1].log_scale.clone(),
             requires_grad=self.mspec.encoder_scales_learnable,
         )
@@ -123,9 +123,9 @@ class Sim2RealTrainer(Trainer):
                 "Could not load appropriate pre-trained weights for this model configuration."
             )
 
-        print(f"Resetting encoder length-scales to [{l0}, {l1}]")
-        self.model.model.encoder.coder[2][0].log_scale = l0
-        self.model.model.encoder.coder[2][1].log_scale = l1
+        print(f"Resetting encoder length-scales to [{el0}, {el1}]")
+        self.model.model.encoder.coder[2][0].log_scale = el0
+        self.model.model.encoder.coder[2][1].log_scale = el1
 
         self.start_epoch = 1
         self.loaded_checkpoint = True
@@ -406,4 +406,5 @@ class Sim2RealTrainer(Trainer):
 
 if __name__ == "__main__":
     s2r = Sim2RealTrainer(paths, opt, out, data, model, tune)
-    s2r.train()
+    s2r.plot_prediction()
+    # s2r.train()

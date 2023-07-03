@@ -1,7 +1,7 @@
 from pprint import pprint
 import torch
 from deepsensor.data.loader import TaskLoader
-from deepsensor.model.defaults import gen_encoder_scales, gen_ppu
+from deepsensor.model.defaults import gen_encoder_scales, gen_ppu, gen_decoder_scale
 import neuralprocesses.torch as nps
 from plum import convert
 
@@ -539,5 +539,8 @@ def from_taskloader(
     if "encoder_scales" not in kwargs:
         encoder_scales = gen_encoder_scales(kwargs["points_per_unit"], task_loader)
         kwargs["encoder_scales"] = encoder_scales
+    if "decoder_scale" not in kwargs:
+        decoder_scale = gen_decoder_scale(kwargs["points_per_unit"])
+        kwargs["decoder_scale"] = decoder_scale
 
     return construct_neural_process(dim_x=2, *args, **kwargs)

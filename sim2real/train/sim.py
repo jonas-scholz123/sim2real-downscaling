@@ -48,7 +48,7 @@ class SimTrainer(Trainer):
         data: DataSpec,
         mspec: ModelSpec,
     ) -> None:
-        self.wandb_name = f"{tspec.tuner} N_stat={self.tspec.num_stations} N_tasks={self.tspec.num_tasks}"
+        self.wandb_name = None
         super().__init__(paths, opt, out, data, mspec)
 
     def _get_data(self):
@@ -136,7 +136,6 @@ class SimTrainer(Trainer):
             names.lat: _coarsen(aux[names.lat], self.var_raw[names.lat]),
             names.lon: _coarsen(aux[names.lon], self.var_raw[names.lon]),
         }
-        print(coarsen)
         aux = aux.coarsen(coarsen, boundary="trim").mean()
         return aux, "all"
 
@@ -216,9 +215,4 @@ class SimTrainer(Trainer):
 
 if __name__ == "__main__":
     s = SimTrainer(paths, opt, out, data, model)
-
-    for t in s.sample_tasks:
-        # s.plot_prediction(t)
-        s.plot_example_task()
-
-    # s.train()
+    s.train()
