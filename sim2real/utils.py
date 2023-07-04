@@ -72,17 +72,14 @@ def get_default_data_processor():
 
 
 def load_weights(model, path, loss_only=False):
-    try:
-        state = torch.load(path, map_location=opt.device)
-        val_loss = state["objective"]
-        if loss_only:
-            return None, val_loss, None
+    state = torch.load(path, map_location=opt.device)
+    val_loss = state["objective"]
+    if loss_only:
+        return None, val_loss, None
 
-        weights = state["weights"]
-        model.load_state_dict(weights)
-        return (model, val_loss, state["epoch"])
-    except (FileNotFoundError, KeyError):
-        return model, float("inf"), 0
+    weights = state["weights"]
+    model.load_state_dict(weights)
+    return (model, val_loss, state["epoch"])
 
 
 def split(df, dts, station_ids) -> Tuple[pd.DataFrame]:

@@ -25,6 +25,7 @@ from sim2real.config import (
     OutputSpec,
     Paths,
     TuneSpec,
+    TunerType,
     opt,
     out,
     model,
@@ -35,6 +36,7 @@ from sim2real.config import (
 )
 from sim2real.train.taskset import Taskset
 from sim2real.train.trainer import Trainer
+from sim2real.train.tuners import film_tuner
 from sim2real.utils import (
     exp_dir_sim,
     exp_dir_sim2real,
@@ -93,50 +95,38 @@ class Sim2RealTrainer(Trainer):
 
         super().__init__(paths, opt, out, data, mspec)
         self._load_initial_weights()
+        self._apply_tuner()
+
+    def _apply_tuner(self):
+        # TODO: Make sure the lengthscales don't become learnable.
+
+        if self.tspec.tuner == TunerType.naive:
+            # Tune everything
+            return
+
+        if self.tspec.tuner == TunerType.film:
+            self.model.model = film_tuner(model)
+            return
 
     def _load_initial_weights(self):
         if self.loaded_checkpoint:
             # We've loaded a Sim2Real checkpoint and don't need anything further.
             return
 
-        # We have to keep track of current length-scales.
-        el0 = torch.nn.Parameter(
-            self.model.model.encoder.coder[2][0].log_scale.clone(),
-            requires_grad=self.mspec.encoder_scales_learnable,
-        )
-        el1 = torch.nn.Parameter(
-            self.model.model.encoder.coder[2][1].log_scale.clone(),
-            requires_grad=self.mspec.encoder_scales_learnable,
-        )
-        # dl = torch.nn.Parameter(
-        #    self.model.model.decoder[1].coder[0].log_scale.clone(),
-        #    requires_grad=self.mspec.decoder_scale_learnable,
-        # )
-
         sim_exp_dir = exp_dir_sim(self.mspec)
         pretrained_path = f"{weight_dir(sim_exp_dir)}/best.h5"
 
         print(f"Loading best pre-trained weights from: {pretrained_path}.")
         # We need to load the best pretrained model weights.
-        self.model.model, self.best_val_loss, self.start_epoch = load_weights(
-            self.model.model, pretrained_path
-        )
-
-        if self.best_val_loss == float("inf"):
-            raise FileNotFoundError(
-                "Could not load appropriate pre-trained weights for this model configuration."
+        try:
+            self.model.model, self.best_val_loss, self.start_epoch = load_weights(
+                self.model.model,
+                pretrained_path,
             )
-
-        # print(self.model.model.encoder.coder[2][0].log_scale)
-        # print(self.model.model.encoder.coder[2][1].log_scale)
-
-        # print(f"Resetting encoder length-scales to [{el0}, {el1}]")
-        # self.model.model.encoder.coder[2][0].log_scale = el0
-        # self.model.model.encoder.coder[2][1].log_scale = el1
-
-        # print("OLD: ", self.model.model.decoder[1].coder[0].log_scale)
-        # print(f"Resetting decoder length-scale to {dl}")
-        # self.model.model.decoder[1].coder[0].log_scale = dl
+        except FileNotFoundError:
+            raise FileNotFoundError(
+                "Not pre-trained weights available for this architecture."
+            )
 
         self.start_epoch = 1
         self.loaded_checkpoint = True

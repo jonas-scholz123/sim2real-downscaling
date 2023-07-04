@@ -271,7 +271,10 @@ class Trainer(ABC):
 
         model = convcnp.from_taskloader(self.task_loader, **model_kwargs)
         model = ConvNP(self.data_processor, self.task_loader, model)
-        self.best_val_loss = load_weights(None, self.best_path, loss_only=True)[1]
+        try:
+            self.best_val_loss = load_weights(None, self.best_path, loss_only=True)[1]
+        except FileNotFoundError:
+            self.best_val_loss = float("inf")
         self.num_params = sum(
             p.numel() for p in model.model.parameters() if p.requires_grad
         )
@@ -279,17 +282,23 @@ class Trainer(ABC):
         print(f"Model receptive field (fraction): {model.model.receptive_field}")
 
         if self.opt.start_from == "best":
-            model.model, self.best_val_loss, self.start_epoch = load_weights(
-                model.model, self.best_path
-            )
-            print(f"Loaded best weights from {self.best_path}.")
-            self.loaded_checkpoint = True
+            try:
+                model.model, self.best_val_loss, self.start_epoch = load_weights(
+                    model.model, self.best_path
+                )
+                print(f"Loaded best weights from {self.best_path}.")
+                self.loaded_checkpoint = True
+            except:
+                self.start_epoch = 0
         elif self.opt.start_from == "latest":
-            model.model, self.best_val_loss, self.start_epoch = load_weights(
-                model.model, self.latest_path
-            )
-            print(f"Loaded latest weights from {self.latest_path}.")
-            self.loaded_checkpoint = True
+            try:
+                model.model, self.best_val_loss, self.start_epoch = load_weights(
+                    model.model, self.latest_path
+                )
+                print(f"Loaded latest weights from {self.latest_path}.")
+                self.loaded_checkpoint = True
+            except:
+                self.start_epoch = 0
         else:
             print("Initialised random weights.")
             self.start_epoch = 0
