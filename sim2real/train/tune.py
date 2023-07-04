@@ -108,6 +108,10 @@ class Sim2RealTrainer(Trainer):
             self.model.model.encoder.coder[2][1].log_scale.clone(),
             requires_grad=self.mspec.encoder_scales_learnable,
         )
+        # dl = torch.nn.Parameter(
+        #    self.model.model.decoder[1].coder[0].log_scale.clone(),
+        #    requires_grad=self.mspec.decoder_scale_learnable,
+        # )
 
         sim_exp_dir = exp_dir_sim(self.mspec)
         pretrained_path = f"{weight_dir(sim_exp_dir)}/best.h5"
@@ -123,9 +127,16 @@ class Sim2RealTrainer(Trainer):
                 "Could not load appropriate pre-trained weights for this model configuration."
             )
 
-        print(f"Resetting encoder length-scales to [{el0}, {el1}]")
-        self.model.model.encoder.coder[2][0].log_scale = el0
-        self.model.model.encoder.coder[2][1].log_scale = el1
+        # print(self.model.model.encoder.coder[2][0].log_scale)
+        # print(self.model.model.encoder.coder[2][1].log_scale)
+
+        # print(f"Resetting encoder length-scales to [{el0}, {el1}]")
+        # self.model.model.encoder.coder[2][0].log_scale = el0
+        # self.model.model.encoder.coder[2][1].log_scale = el1
+
+        # print("OLD: ", self.model.model.decoder[1].coder[0].log_scale)
+        # print(f"Resetting decoder length-scale to {dl}")
+        # self.model.model.decoder[1].coder[0].log_scale = dl
 
         self.start_epoch = 1
         self.loaded_checkpoint = True
@@ -264,23 +275,6 @@ class Sim2RealTrainer(Trainer):
 
         return train, val, test
 
-    def _add_aux(self) -> Tuple[Union[xr.DataArray, pd.Series], Union[float, int, str]]:
-        def _coarsen(high_res):
-            """
-            Coarsen factor for shrinking something high-res to low-res.
-            """
-            factor = self.data.aux_coarsen_factor * len(high_res) // self.mspec.ppu
-            return int(factor)
-
-        aux = load_elevation()
-        coarsen = {
-            names.lat: _coarsen(aux[names.lat]),
-            names.lon: _coarsen(aux[names.lon]),
-        }
-
-        aux = aux.coarsen(coarsen, boundary="trim").mean()
-        return aux, "all"
-
     def _plot_X_t(self):
         return self.raw_aux
 
@@ -305,7 +299,7 @@ class Sim2RealTrainer(Trainer):
 
         # Higher resolution prediction everywhere.
         mean_ds, std_ds = self.model.predict(
-            task, X_t=self.raw_aux, resolution_factor=self.data.aux_coarsen_factor
+            task, X_t=self.raw_aux, resolution_factor=1
         )
 
         proj = ccrs.TransverseMercator(central_longitude=10, approx=False)
@@ -406,4 +400,7 @@ class Sim2RealTrainer(Trainer):
 
 if __name__ == "__main__":
     s2r = Sim2RealTrainer(paths, opt, out, data, model, tune)
-    s2r.train()
+    for t in s2r.sample_tasks:
+        s2r.plot_example_task(t)
+        s2r.plot_prediction(t)
+    # s2r.train()

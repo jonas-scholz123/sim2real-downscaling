@@ -542,5 +542,6 @@ def from_taskloader(
     if "decoder_scale" not in kwargs:
         decoder_scale = gen_decoder_scale(kwargs["points_per_unit"])
         kwargs["decoder_scale"] = decoder_scale
+    pprint(kwargs)
 
     return construct_neural_process(dim_x=2, *args, **kwargs)

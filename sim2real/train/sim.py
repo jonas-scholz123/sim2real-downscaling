@@ -123,22 +123,6 @@ class SimTrainer(Trainer):
         era5 = load_era5()[names.temp]
         return era5, self.data.era5_context, self.data.era5_target
 
-    def _add_aux(self) -> Tuple[Union[xr.DataArray, pd.Series], Union[float, int, str]]:
-        def _coarsen(high_res, low_res):
-            """
-            Coarsen factor for shrinking something high-res to low-res.
-            """
-            factor = self.data.aux_coarsen_factor * len(high_res) // len(low_res)
-            return int(factor)
-
-        aux = load_elevation()
-        coarsen = {
-            names.lat: _coarsen(aux[names.lat], self.var_raw[names.lat]),
-            names.lon: _coarsen(aux[names.lon], self.var_raw[names.lon]),
-        }
-        aux = aux.coarsen(coarsen, boundary="trim").mean()
-        return aux, "all"
-
     def _plot_X_t(self):
         return self.var_raw
 
