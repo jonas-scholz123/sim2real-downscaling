@@ -104,7 +104,7 @@ class Sim2RealTrainer(Trainer):
             tuner = film_tuner
         else:
             raise NotImplementedError(f"Tuner {self.tspec.tuner} not yet implemented.")
-        
+
         self.model.model = tuner(self.model.model)
 
     def _load_initial_weights(self):
@@ -118,10 +118,11 @@ class Sim2RealTrainer(Trainer):
         print(f"Loading best pre-trained weights from: {pretrained_path}.")
         # We need to load the best pretrained model weights.
         try:
-            self.model.model, self.best_val_loss, self.start_epoch = load_weights(
+            self.model.model, _, _ = load_weights(
                 self.model.model,
                 pretrained_path,
             )
+            self.best_val_loss = float("inf")
         except FileNotFoundError:
             raise FileNotFoundError(
                 "Not pre-trained weights available for this architecture."
@@ -389,4 +390,5 @@ class Sim2RealTrainer(Trainer):
 
 if __name__ == "__main__":
     s2r = Sim2RealTrainer(paths, opt, out, data, model, tune)
-    s2r.train()
+    s2r.plot_prediction()
+    # s2r.train()
