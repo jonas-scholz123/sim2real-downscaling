@@ -181,15 +181,14 @@ opt = OptimSpec(
 ppu = 200  # Found from dwd.compute_ppu()
 model = ModelSpec(
     unet_channels=(96,) * 6,
-    # unet_channels=(128,) * 4,
     dim_yt=1,
     dim_yc=(1, 7),
     ppu=ppu,
     film=True,
     freeze_film=True,
     likelihood="het",
-    encoder_scales=[0.5 / ppu, 0.5 / ppu],
-    decoder_scale=0.5,
+    encoder_scales=[1 / ppu, 1 / ppu],
+    decoder_scale=1 / ppu,
     encoder_scales_learnable=False,
     decoder_scale_learnable=False,
 )
