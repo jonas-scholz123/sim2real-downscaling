@@ -31,7 +31,7 @@ def exp_dir_sim(m: ModelSpec):
 
 def exp_dir_sim2real(m: ModelSpec, t: TuneSpec):
     model_dir = get_model_dir(m)
-    path = f"{model_dir}/sim2real_{t.num_stations}_{t.num_tasks}/{t.tuner}"
+    path = f"{model_dir}/sim2real_N{t.num_stations}_M{t.num_tasks}/{t.tuner}"
     ensure_exists(path)
     return path
 
