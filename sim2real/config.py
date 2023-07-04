@@ -40,7 +40,6 @@ class DataSpec:
     era5_target: int
     dwd_context: Tuple[int, int]
     dwd_target: int
-    aux_coarsen_factor: float
 
 
 @dataclass
