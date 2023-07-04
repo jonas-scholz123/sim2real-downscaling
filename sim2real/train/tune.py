@@ -58,11 +58,11 @@ def sample_dates(time_split, set_name, num, seed=42):
     """
     Randomly sample num dates from time_split from the right set.
     """
-    return (
-        time_split[time_split[names.set] == set_name]
-        .sample(num, random_state=seed)
-        .index.sort_values()
-    )
+    df = time_split[time_split[names.set] == set_name]
+
+    if num > df.shape[0]:
+        return df.index.sort_values()
+    return df.sample(num, random_state=seed).index.sort_values()
 
 
 def sample_stations(station_split, set_name, num):
@@ -390,5 +390,4 @@ class Sim2RealTrainer(Trainer):
 
 if __name__ == "__main__":
     s2r = Sim2RealTrainer(paths, opt, out, data, model, tune)
-    s2r.plot_prediction()
-    # s2r.train()
+    s2r.train()
