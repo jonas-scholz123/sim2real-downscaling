@@ -400,7 +400,4 @@ class Sim2RealTrainer(Trainer):
 
 if __name__ == "__main__":
     s2r = Sim2RealTrainer(paths, opt, out, data, model, tune)
-    for t in s2r.sample_tasks:
-        s2r.plot_example_task(t)
-        s2r.plot_prediction(t)
-    # s2r.train()
+    s2r.train()
