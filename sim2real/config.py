@@ -104,6 +104,7 @@ class OptimSpec:
 
 class TunerType(Enum):
     naive = 0
+    film = 1
 
 
 @dataclass
@@ -171,7 +172,7 @@ opt = OptimSpec(
     batches_per_epoch=50,
     num_epochs=200,
     lr=1e-4,
-    start_from=None,  # None, "best", "latest"
+    start_from="best",  # None, "best", "latest"
     scheduler_patience=5,
     early_stop_patience=15,
     scheduler_factor=1 / 3,
@@ -203,7 +204,7 @@ out = OutputSpec(
 )
 
 tune = TuneSpec(
-    tuner=TunerType.naive,
+    tuner=TunerType.film,
     num_stations=50,
     num_tasks=1024,
     val_frac_stations=0.2,

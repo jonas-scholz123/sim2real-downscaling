@@ -36,7 +36,7 @@ from sim2real.config import (
 )
 from sim2real.train.taskset import Taskset
 from sim2real.train.trainer import Trainer
-from sim2real.train.tuners import film_tuner
+from sim2real.train.tuners import film_tuner, naive_tuner
 from sim2real.utils import (
     exp_dir_sim,
     exp_dir_sim2real,
@@ -98,15 +98,14 @@ class Sim2RealTrainer(Trainer):
         self._apply_tuner()
 
     def _apply_tuner(self):
-        # TODO: Make sure the lengthscales don't become learnable.
-
         if self.tspec.tuner == TunerType.naive:
-            # Tune everything
-            return
-
-        if self.tspec.tuner == TunerType.film:
-            self.model.model = film_tuner(model)
-            return
+            tuner = naive_tuner
+        elif self.tspec.tuner == TunerType.film:
+            tuner = film_tuner
+        else:
+            raise NotImplementedError(f"Tuner {self.tspec.tuner} not yet implemented.")
+        
+        self.model.model = tuner(self.model.model)
 
     def _load_initial_weights(self):
         if self.loaded_checkpoint:

@@ -201,6 +201,14 @@ class Trainer(ABC):
         return l
 
     def train(self):
+        num_params_trainable = sum(
+            p.numel() for p in self.model.model.parameters() if p.requires_grad
+        )
+        num_params = sum(p.numel() for p in self.model.model.parameters())
+
+        print(f"Training {num_params_trainable} out of {num_params} parameters.")
+        print(f"Starting from episode {self.start_epoch}")
+
         epoch_losses = []
 
         train_iter = iter(self.train_loader)
@@ -219,8 +227,6 @@ class Trainer(ABC):
         if self.start_epoch == 1:
             val_loss = self.evaluate()
             self._log(0, val_loss, val_loss)
-
-        print(f"Starting from episode {self.start_epoch}")
 
         for epoch in self.pbar:
             batch_losses = []
@@ -275,10 +281,7 @@ class Trainer(ABC):
             self.best_val_loss = load_weights(None, self.best_path, loss_only=True)[1]
         except FileNotFoundError:
             self.best_val_loss = float("inf")
-        self.num_params = sum(
-            p.numel() for p in model.model.parameters() if p.requires_grad
-        )
-        print(f"Model number parameters: {self.num_params}")
+
         print(f"Model receptive field (fraction): {model.model.receptive_field}")
 
         if self.opt.start_from == "best":
