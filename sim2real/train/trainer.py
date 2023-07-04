@@ -17,6 +17,7 @@ from deepsensor import context_encoding
 from deepsensor.data.loader import TaskLoader
 from deepsensor.model.convnp import ConvNP
 from deepsensor.plot import receptive_field, offgrid_context
+from sim2real.datasets import load_elevation
 from sim2real.train.taskset import Taskset
 
 from sim2real.utils import (
@@ -260,6 +261,8 @@ class Trainer(ABC):
             points_per_unit=self.mspec.ppu,
             likelihood=self.mspec.likelihood,
             unet_channels=self.mspec.unet_channels,
+            encoder_scales=self.mspec.encoder_scales,
+            decoder_scale=self.mspec.decoder_scale,
             encoder_scales_learnable=self.mspec.encoder_scales_learnable,
             decoder_scale_learnable=self.mspec.decoder_scale_learnable,
             film=self.mspec.film,
@@ -320,6 +323,23 @@ class Trainer(ABC):
                 torch_state=torch_state,
                 numpy_state=numpy_state,
             )
+
+    def _add_aux(self) -> Tuple[Union[xr.DataArray, pd.Series], Union[float, int, str]]:
+        def _coarsen(high_res):
+            """
+            Coarsen factor for shrinking something high-res to PPU resolution.
+            """
+            factor = len(high_res) // self.mspec.ppu
+            return int(factor)
+
+        aux = load_elevation()
+        coarsen = {
+            names.lat: _coarsen(aux[names.lat]),
+            names.lon: _coarsen(aux[names.lon]),
+        }
+
+        aux = aux.coarsen(coarsen, boundary="trim").mean()
+        return aux, "all"
 
     def _init_log(self):
         if self.out.wandb:

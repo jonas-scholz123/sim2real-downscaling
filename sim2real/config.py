@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from enum import Enum
-from typing import Tuple
+from typing import List, Tuple
 from pathlib import Path
 import cartopy.crs as ccrs
 
@@ -52,6 +52,8 @@ class ModelSpec:
     ppu: int
     dim_yt: int
     dim_yc: Tuple[int]
+    encoder_scales: List[float]
+    decoder_scale: float
     encoder_scales_learnable: bool
     decoder_scale_learnable: bool
 
@@ -160,10 +162,6 @@ data = DataSpec(
     era5_target=100,
     dwd_context=(5, 50),
     dwd_target="all",
-    # How much more dense should the elevation data
-    # be compared to the era5 data? Smaller => more dense
-    # aux data.
-    aux_coarsen_factor=0.8,
 )
 
 opt = OptimSpec(
@@ -180,20 +178,24 @@ opt = OptimSpec(
     scheduler_factor=1 / 3,
 )
 
+ppu = 200  # Found from dwd.compute_ppu()
 model = ModelSpec(
-    unet_channels=(128,) * 4,
+    unet_channels=(96,) * 6,
+    # unet_channels=(128,) * 4,
     dim_yt=1,
     dim_yc=(1, 7),
-    ppu=40,  # Found from dwd.compute_ppu()
+    ppu=ppu,
     film=True,
     freeze_film=True,
     likelihood="het",
+    encoder_scales=[0.5 / ppu, 0.5 / ppu],
+    decoder_scale=0.5,
     encoder_scales_learnable=False,
     decoder_scale_learnable=False,
 )
 
 out = OutputSpec(
-    wandb=True,
+    wandb=False,
     plots=True,
     wandb_name=None,
     fig_crs=ccrs.TransverseMercator(central_longitude=10, approx=False),
