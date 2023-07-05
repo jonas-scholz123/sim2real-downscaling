@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from enum import Enum
-from typing import List, Tuple
+from typing import Dict, List, Tuple
 from pathlib import Path
 import cartopy.crs as ccrs
 
@@ -40,6 +40,7 @@ class DataSpec:
     era5_target: int
     dwd_context: Tuple[int, int]
     dwd_target: int
+    norm_params: Dict
 
 
 @dataclass
@@ -116,6 +117,18 @@ class TuneSpec:
     val_frac_times: float
 
 
+# Inferred from ERA5 data and pasted here.
+norm_params = {
+    "coords": {
+        "time": {"name": "TIME"},
+        "x1": {"name": "LAT", "map": (47.2, 54.95)},
+        "x2": {"name": "LON", "map": (5.8, 15.05)},
+    },
+    "T2M": {"mean": 9.695045471191406, "std": 7.660834312438965},
+    "HEIGHT": {"mean": 263.4660561588103, "std": 345.67930603408615},
+}
+
+
 names = Names(
     temp="T2M",
     lat="LAT",
@@ -158,10 +171,11 @@ data = DataSpec(
     # This should be set in a way that ensures all times
     # of day are covered.
     val_freq="39H",
-    era5_context=(1, 500),
+    era5_context=(0, 500),
     era5_target="all",
     dwd_context=(5, 50),
     dwd_target="all",
+    norm_params=norm_params,
 )
 
 opt = OptimSpec(

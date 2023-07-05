@@ -68,6 +68,7 @@ def get_default_data_processor():
         x2_name=names.lon,
         x1_map=(x1_min, x1_max),
         x2_map=(x2_min, x2_max),
+        norm_params=data.norm_params,
     )
 
 
