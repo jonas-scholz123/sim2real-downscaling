@@ -231,7 +231,7 @@ class Sim2RealTrainer(Trainer):
         # TODO: Think abt set_task_loader
         train = self.gen_trainset(
             train_stations,
-            self.data.dwd_context,
+            (0, train_stations),
             train_stations,
             self.data.dwd_target,
             self.train_dates,
@@ -410,4 +410,5 @@ class Sim2RealTrainer(Trainer):
 
 if __name__ == "__main__":
     s2r = Sim2RealTrainer(paths, opt, out, data, model, tune)
-    s2r.train()
+    s2r.plot_prediction()
+    # s2r.train()
