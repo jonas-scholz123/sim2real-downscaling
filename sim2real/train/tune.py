@@ -394,20 +394,3 @@ class Sim2RealTrainer(Trainer):
 if __name__ == "__main__":
     s2r = Sim2RealTrainer(paths, opt, out, data, model, tune)
     s2r.train()
-# %%
-# idxs = range(50, 90, 4)
-# idxs = [432]
-# s2r.sample_tasks = [s2r.val_set[i] for i in idxs]
-#
-# for t in s2r.sample_tasks:
-#    s2r.plot_example_task(t)
-#    s2r.plot_prediction(t)
-## %%
-## s2r.val_set[432]
-## %%
-# s2r.val_set.num_target
-#
-# t = s.task_loader("2022-08-20 12:00:00", num_context, num_target)
-#
-## s2r.task_loader("2022-08-20 12:00:00", [10, "all"], "all")
-# s2r.plot_prediction(t)

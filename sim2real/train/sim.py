@@ -203,7 +203,3 @@ class SimTrainer(Trainer):
 if __name__ == "__main__":
     s = SimTrainer(paths, opt, out, data, model)
     s.train()
-
-    # num_context = [50, "all"]
-    # num_target = ["all"]
-    # s.plot_prediction(s.task_loader("2022-08-20 12:00:00", num_context, num_target))
