@@ -364,7 +364,10 @@ class Trainer(ABC):
             }
             name = self.out.wandb_name or self.wandb_name
             self.wandb = wandb.init(
-                project="climate-sim2real", config=config, name=name
+                project="climate-sim2real",
+                config=config,
+                name=name,
+                reinit=True,
             )
 
     def _log(self, epoch, train_loss, val_loss):
