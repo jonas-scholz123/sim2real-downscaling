@@ -1,5 +1,6 @@
 # %%
 import copy
+from itertools import product
 from typing import Tuple, Union
 import xarray as xr
 import pandas as pd
@@ -409,5 +410,18 @@ class Sim2RealTrainer(Trainer):
 
 
 if __name__ == "__main__":
-    s2r = Sim2RealTrainer(paths, opt, out, data, model, tune)
-    s2r.train()
+    nums_stations = [20, 100, 500]  # 4, 20, 100, 500?
+    nums_tasks = [400, 2000, 10000]
+    tuners = [TunerType.naive, TunerType.film]
+
+    tspec = tune
+
+    for num_stations, num_tasks, tuner in product(nums_stations, nums_tasks, tuners):
+        # TODO: Need to modify LR?
+
+        tspec.num_stations = num_stations
+        tspec.num_tasks = num_tasks
+        tspec.tuner = tuner
+
+        s2r = Sim2RealTrainer(paths, opt, out, data, model, tspec)
+        s2r.train()
