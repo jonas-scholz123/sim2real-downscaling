@@ -218,9 +218,9 @@ class Sim2RealTrainer(Trainer):
         m_val = int(tune.val_frac_times * m_all)
         m_train = m_all - m_val
 
-        train_dates = sample_dates(time_split, names.train, m_train)
-        val_dates = sample_dates(time_split, names.val, m_val)
-        test_dates = time_split[time_split[names.set] == names.test].index
+        self.train_dates = sample_dates(time_split, names.train, m_train)
+        self.val_dates = sample_dates(time_split, names.val, m_val)
+        self.test_dates = time_split[time_split[names.set] == names.test].index
 
         train_stations = sample_stations(stat_split, names.train, n_train)
         val_stations = sample_stations(stat_split, names.val, n_val)
@@ -234,7 +234,7 @@ class Sim2RealTrainer(Trainer):
             self.data.dwd_context,
             train_stations,
             self.data.dwd_target,
-            train_dates,
+            self.train_dates,
             set_task_loader=False,
             deterministic=False,
         )
@@ -244,7 +244,7 @@ class Sim2RealTrainer(Trainer):
             "all",
             val_stations,
             "all",
-            val_dates,
+            self.val_dates,
             set_task_loader=True,
             deterministic=True,
         )
@@ -254,7 +254,7 @@ class Sim2RealTrainer(Trainer):
             "all",
             test_stations,
             "all",
-            test_dates,
+            self.test_dates,
             set_task_loader=False,
             deterministic=True,
         )
@@ -264,6 +264,23 @@ class Sim2RealTrainer(Trainer):
         self.test_stations = test_stations
 
         return train, val, test
+
+    def _init_sample_tasks(self):
+        tl = self.test_set.task_loader
+        context_points = (self.tspec.num_stations, "all")
+        context_points = "all"
+
+        valid_dates = set(self.test_dates)
+
+        tasks = []
+        for dt in self.out.sample_dates:
+            dt = pd.to_datetime(dt)
+            if dt not in valid_dates:
+                print(f"Warning: {dt} not in test set for sample tasks. Falling back.")
+                tasks.append(self.test_set[0])
+            else:
+                tasks.append(tl(dt, context_points, "all"))
+        return tasks
 
     def _plot_X_t(self):
         return self.raw_aux

@@ -213,8 +213,8 @@ out = OutputSpec(
     wandb_name="Tune with interpolated ERA5",
     fig_crs=ccrs.TransverseMercator(central_longitude=10, approx=False),
     data_crs=ccrs.PlateCarree(),
-    # This doesn't work yet:
-    sample_dates=["2021-12-27 13:00:00", "2022-08-21 03:00:00"],
+    # Must be part of test dates.
+    sample_dates=["2022-03-01 08:00:00", "2022-01-02 04:00:00"],
 )
 
 tune = TuneSpec(
