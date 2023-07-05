@@ -231,7 +231,7 @@ class Sim2RealTrainer(Trainer):
         # TODO: Think abt set_task_loader
         train = self.gen_trainset(
             train_stations,
-            (0, train_stations),
+            (0, n_train),
             train_stations,
             self.data.dwd_target,
             self.train_dates,
