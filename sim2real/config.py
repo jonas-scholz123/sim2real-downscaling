@@ -178,12 +178,12 @@ data = DataSpec(
     norm_params=norm_params,
 )
 
-opt = OptimSpec(
+pretrain_opt = OptimSpec(
     seed=42,
     device="cuda",
     batch_size=16,
     batch_size_val=512,
-    batches_per_epoch=100,
+    batches_per_epoch=200,
     num_epochs=200,
     lr=1e-4,
     start_from="best",  # None, "best", "latest"
@@ -191,6 +191,22 @@ opt = OptimSpec(
     early_stop_patience=15,
     scheduler_factor=1 / 3,
 )
+
+tune_opt = OptimSpec(
+    seed=42,
+    device="cuda",
+    batch_size=16,
+    batch_size_val=512,
+    batches_per_epoch=100,
+    num_epochs=200,
+    lr=3e-5,
+    start_from=None,  # None, "best", "latest"
+    scheduler_patience=3,
+    early_stop_patience=5,
+    scheduler_factor=1 / 3,
+)
+
+opt = tune_opt
 
 ppu = 200  # Found from dwd.compute_ppu()
 model = ModelSpec(
