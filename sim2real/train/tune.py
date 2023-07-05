@@ -410,5 +410,4 @@ class Sim2RealTrainer(Trainer):
 
 if __name__ == "__main__":
     s2r = Sim2RealTrainer(paths, opt, out, data, model, tune)
-    s2r.plot_prediction()
-    # s2r.train()
+    s2r.train()
