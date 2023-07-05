@@ -158,18 +158,18 @@ data = DataSpec(
     # This should be set in a way that ensures all times
     # of day are covered.
     val_freq="39H",
-    era5_context=(5, 30),
-    era5_target=100,
+    era5_context=(0, 500),
+    era5_target="all",
     dwd_context=(5, 50),
     dwd_target="all",
 )
 
 opt = OptimSpec(
     seed=42,
-    device="cpu",
+    device="cuda",
     batch_size=16,
     batch_size_val=512,
-    batches_per_epoch=50,
+    batches_per_epoch=100,
     num_epochs=200,
     lr=1e-4,
     start_from="best",  # None, "best", "latest"
@@ -194,9 +194,9 @@ model = ModelSpec(
 )
 
 out = OutputSpec(
-    wandb=False,
+    wandb=True,
     plots=True,
-    wandb_name=None,
+    wandb_name="Tune with interpolated ERA5",
     fig_crs=ccrs.TransverseMercator(central_longitude=10, approx=False),
     data_crs=ccrs.PlateCarree(),
     # This doesn't work yet:
@@ -204,9 +204,9 @@ out = OutputSpec(
 )
 
 tune = TuneSpec(
-    tuner=TunerType.film,
+    tuner=TunerType.naive,
     num_stations=50,
-    num_tasks=1024,
+    num_tasks=10000,
     val_frac_stations=0.2,
     val_frac_times=0.2,
 )
