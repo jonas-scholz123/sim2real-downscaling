@@ -225,8 +225,10 @@ class Trainer(ABC):
         self.pbar = tqdm(range(self.start_epoch, self.opt.num_epochs + 1))
 
         if self.start_epoch == 1:
+            # Before training, get initial eval and plots.
             val_loss = self.evaluate()
             self._log(0, val_loss, val_loss)
+            self.plot_sample_tasks(0)
 
         for epoch in self.pbar:
             batch_losses = []
@@ -250,9 +252,7 @@ class Trainer(ABC):
             self._log(epoch, train_loss, val_loss)
 
             if self.out.plots:
-                for task in self.sample_tasks:
-                    time = task["time"]
-                    self.plot_prediction(task=task, name=f"epoch_{epoch}_{time}")
+                self.plot_sample_tasks(epoch)
 
             if self.early_stopper.early_stop(val_loss):
                 break
@@ -424,6 +424,11 @@ class Trainer(ABC):
             val_lik = self.evaluate()
             self._log(epoch, train_loss, val_lik)
             self._save_weights(epoch, val_lik)
+
+    def plot_sample_tasks(self, epoch):
+        for task in self.sample_tasks:
+            time = task["time"]
+            self.plot_prediction(task=task, name=f"epoch_{epoch}_{time}")
 
     def plot_receptive_field(self):
         receptive_field(
