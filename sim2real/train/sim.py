@@ -131,6 +131,7 @@ class SimTrainer(Trainer):
             task = self.sample_tasks[0]
 
         mean_ds, std_ds = self.model.predict(task, X_t=self._plot_X_t())
+        mean_ds_dense, std_ds_dense = self.model.predict(task, X_t=self.aux_raw)
 
         coord_map = {
             names.lat: self.var_raw[names.lat],
@@ -157,7 +158,7 @@ class SimTrainer(Trainer):
         vmin, vmax = cbar.vmin, cbar.vmax
 
         axs[0].set_title("ERA5")
-        mean_ds[names.temp].sel(sel).plot(
+        mean_ds_dense[names.temp].sel(sel).plot(
             cmap="seismic",
             ax=axs[1],
             transform=ccrs.PlateCarree(),
@@ -165,14 +166,16 @@ class SimTrainer(Trainer):
             vmax=vmax,
         )
         axs[1].set_title("ConvNP mean")
-        std_ds[names.temp].sel(sel).plot(
+        std_ds_dense[names.temp].sel(sel).plot(
             cmap="Greys", ax=axs[2], transform=ccrs.PlateCarree()
         )
         axs[2].set_title("ConvNP std dev")
         err_da.sel(sel).plot(cmap="seismic", ax=axs[3], transform=ccrs.PlateCarree())
         axs[3].set_title("ConvNP error")
+
+        context_axs = [ax for i, ax in enumerate(axs) if i != 1]
         offgrid_context(
-            axs,
+            context_axs,
             task,
             self.data_processor,
             s=3**2,
@@ -200,3 +203,7 @@ class SimTrainer(Trainer):
 if __name__ == "__main__":
     s = SimTrainer(paths, opt, out, data, model)
     s.train()
+
+    # num_context = [50, "all"]
+    # num_target = ["all"]
+    # s.plot_prediction(s.task_loader("2022-08-20 12:00:00", num_context, num_target))

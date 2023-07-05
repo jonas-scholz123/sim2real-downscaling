@@ -65,6 +65,9 @@ class Taskset(Dataset):
         num_context = self._map_num_context(self.num_context)
         date = self.times[idx]
         task = self.task_loader(
-            date, num_context, self.num_target, deterministic=self.deterministic
+            date,
+            num_context,
+            self.num_target,
+            datewise_deterministic=self.deterministic,
         )
         return task
