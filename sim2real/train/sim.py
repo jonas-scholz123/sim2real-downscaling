@@ -211,8 +211,4 @@ class SimTrainer(Trainer):
 
 if __name__ == "__main__":
     s = SimTrainer(paths, opt, out, data, model)
-# %%
-date = s.train_set[0]["time"]
-t = s.task_loader(date, (50, "all"), "all")
-s.plot_prediction(t)
-# s.train()
+    s.train()

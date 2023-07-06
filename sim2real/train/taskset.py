@@ -24,6 +24,8 @@ class Taskset(Dataset):
         time_range: Tuple[str, str] = None,
         freq="H",
         deterministic=False,
+        frac_power=1,
+        split=False,
     ) -> None:
         """
         Must define either datetimes or time_range & freq.
@@ -42,6 +44,13 @@ class Taskset(Dataset):
         self.deterministic = deterministic
         self.seed = opt.seed + 1
         self.rng = np.random.default_rng(self.seed)
+        self.frac_power = frac_power
+        self.split = split
+
+        if split:
+            self.low, self.high = self.num_context[0]
+            self.num_context[0] = "split"
+            self.num_target = "split"
 
     def _map_num_context(self, num_context):
         """
@@ -49,10 +58,14 @@ class Taskset(Dataset):
         """
         if isinstance(num_context, list):
             return [self._map_num_context(el) for el in num_context]
-        elif isinstance(num_context, tuple):
+        elif isinstance(num_context, tuple) and isinstance(num_context[0], int):
             return int(self.rng.integers(*num_context))
         else:
             return num_context
+
+    def get_split_frac(self):
+        # Sample between lower and upper frac and take power to drive towards lower end.
+        return self.rng.uniform(self.low, self.high) ** self.frac_power
 
     def __len__(self):
         return len(self.times)
@@ -64,10 +77,19 @@ class Taskset(Dataset):
         # Random number of context observations
         num_context = self._map_num_context(self.num_context)
         date = self.times[idx]
+
+        if self.split:
+            split_frac = self.get_split_frac()
+        else:
+            # default.
+            split_frac = 0.5
+
         task = self.task_loader(
             date,
             num_context,
             self.num_target,
             datewise_deterministic=self.deterministic,
+            split_frac=split_frac,
         )
+
         return task

@@ -45,7 +45,7 @@ from sim2real.utils import (
     exp_dir_sim2real,
     load_weights,
     weight_dir,
-    split,
+    split_df,
     ensure_exists,
 )
 from sim2real.plots import save_plot
@@ -153,9 +153,10 @@ class Sim2RealTrainer(Trainer):
         times,
         set_task_loader: bool = False,
         deterministic: bool = False,
+        split: bool = False,
     ):
-        c_df, _ = split(self.full, times, c_stations)
-        t_df, _ = split(self.full, times, t_stations)
+        c_df, _ = split_df(self.full, times, c_stations)
+        t_df, _ = split_df(self.full, times, t_stations)
 
         c_df = self._to_deepsensor_df(c_df)
         t_df = self._to_deepsensor_df(t_df)
@@ -203,6 +204,8 @@ class Sim2RealTrainer(Trainer):
             self.opt,
             datetimes=dts,
             deterministic=deterministic,
+            split=split,
+            frac_power=self.tspec.frac_power,
         )
 
     def _init_tasksets(self) -> Tuple[Taskset, Taskset, Taskset]:
@@ -236,12 +239,13 @@ class Sim2RealTrainer(Trainer):
         # TODO: Think abt set_task_loader
         train = self.gen_trainset(
             train_stations,
-            (0, n_train),
+            self.data.dwd_context,
             train_stations,
             self.data.dwd_target,
             self.train_dates,
             set_task_loader=False,
             deterministic=False,
+            split=True,
         )
 
         val = self.gen_trainset(
@@ -252,6 +256,7 @@ class Sim2RealTrainer(Trainer):
             self.val_dates,
             set_task_loader=True,
             deterministic=True,
+            split=False,
         )
 
         test = self.gen_trainset(
@@ -262,6 +267,7 @@ class Sim2RealTrainer(Trainer):
             self.test_dates,
             set_task_loader=False,
             deterministic=True,
+            split=False,
         )
 
         self.train_stations = train_stations
@@ -448,4 +454,13 @@ if __name__ == "__main__":
     nums_stations = [20, 100, 500]  # 4, 20, 100, 500?
     nums_tasks = [400, 2000, 10000]
     tuners = [TunerType.naive, TunerType.film]
-    run_experiments(nums_stations, nums_tasks, tuners)
+    #run_experiments(nums_stations, nums_tasks, tuners)
+
+    s2r = Sim2RealTrainer(paths, opt, out, data, model, tune)
+
+    idxs = range(5)
+
+    for idx in idxs:
+        t = s2r.train_set[idx]
+        s2r.plot_example_task(t)
+        s2r.plot_prediction(t)

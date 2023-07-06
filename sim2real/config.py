@@ -115,6 +115,8 @@ class TuneSpec:
     num_tasks: int
     val_frac_stations: float
     val_frac_times: float
+    split: bool
+    frac_power: int
 
 
 # Inferred from ERA5 data and pasted here.
@@ -173,7 +175,7 @@ data = DataSpec(
     val_freq="39H",
     era5_context=(0, 500),
     era5_target="all",
-    dwd_context=(5, 50),
+    dwd_context=(0.0, 1.0),
     dwd_target="all",
     norm_params=norm_params,
 )
@@ -198,7 +200,7 @@ tune_opt = OptimSpec(
     batch_size=16,
     batch_size_val=512,
     batches_per_epoch=100,
-    num_epochs=200,
+    num_epochs=50,
     lr=3e-5,
     start_from=None,  # None, "best", "latest"
     scheduler_patience=3,
@@ -226,7 +228,7 @@ model = ModelSpec(
 out = OutputSpec(
     wandb=True,
     plots=True,
-    wandb_name="Tune with interpolated ERA5",
+    wandb_name=None,
     fig_crs=ccrs.TransverseMercator(central_longitude=10, approx=False),
     data_crs=ccrs.PlateCarree(),
     # Must be part of test dates.
@@ -239,4 +241,7 @@ tune = TuneSpec(
     num_tasks=10000,
     val_frac_stations=0.2,
     val_frac_times=0.2,
+    split=True,
+    # How much should sparse tasks be preferred? Larger => more sparse tasks.
+    frac_power=2,
 )

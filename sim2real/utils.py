@@ -83,7 +83,7 @@ def load_weights(model, path, loss_only=False):
     return (model, val_loss, state["epoch"])
 
 
-def split(df, dts, station_ids) -> Tuple[pd.DataFrame]:
+def split_df(df, dts, station_ids) -> Tuple[pd.DataFrame]:
     """
     Split a dataframe by BOTH datetimes and station ids.
 
