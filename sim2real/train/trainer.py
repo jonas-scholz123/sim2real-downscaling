@@ -353,19 +353,18 @@ class Trainer(ABC):
         aux = aux.coarsen(coarsen, boundary="trim").mean()
         return aux, "all"
 
+    @abstractmethod
+    def _wandb_config(self) -> dict:
+        return
+
     def _init_log(self):
         if self.out.wandb:
             # Set this in case we're running on HPC where we can't run login command.
             os.environ["WANDB_API_KEY"] = keys.WANDB_API_KEY
-            config = {
-                "opt": asdict(self.opt),
-                "data": asdict(self.data),
-                "model": asdict(self.mspec),
-            }
             name = self.out.wandb_name or self.wandb_name
             self.wandb = wandb.init(
                 project="climate-sim2real",
-                config=config,
+                config=self._wandb_config(),
                 name=name,
                 reinit=True,
             )

@@ -15,7 +15,7 @@ import xarray as xr
 import numpy as np
 from scipy.spatial.distance import cdist
 
-from sim2real.config import Paths, paths, names, data
+from sim2real.config import Paths, paths, names, data, out
 from sim2real.gridder import Gridder
 from sim2real.utils import get_default_data_processor
 import sim2real.plots as plots
@@ -265,13 +265,20 @@ class DWDSTationData:
         ppu = 1 / dists.min()
         return ppu
 
-    def plot_stations(self, station_ids):
-        _, axs, transform = plots.init_fig(ret_transform=True)
+    def plot_stations(self, station_ids, marker="o", color="C0", ax=None, **kwargs):
+        if ax is None:
+            _, axs = plots.init_fig()
+            ax = axs[0]
 
         gdf = self.meta_df.query(f"{names.station_id} in @station_ids")
         gdf = gdf.groupby(names.station_id).last()
         gdf.plot(
-            ax=axs[0], transform=transform, marker="o", facecolor="none", color="C0"
+            ax=ax,
+            transform=out.data_crs,
+            marker=marker,
+            facecolor="none",
+            color=color,
+            **kwargs,
         )
 
 

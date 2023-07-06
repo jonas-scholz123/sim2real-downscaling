@@ -1,5 +1,6 @@
 # %%
 import copy
+from dataclasses import asdict
 from itertools import product
 from typing import Tuple, Union
 import xarray as xr
@@ -35,6 +36,7 @@ from sim2real.config import (
     paths,
     tune,
 )
+from sim2real.plots import init_fig
 from sim2real.train.taskset import Taskset
 from sim2real.train.trainer import Trainer
 from sim2real.train.tuners import film_tuner, naive_tuner
@@ -97,6 +99,8 @@ class Sim2RealTrainer(Trainer):
         super().__init__(paths, opt, out, data, mspec)
         self._load_initial_weights()
         self._apply_tuner()
+
+        self.plot_train_val()
 
     def _apply_tuner(self):
         if self.tspec.tuner == TunerType.naive:
@@ -398,6 +402,15 @@ class Sim2RealTrainer(Trainer):
         plt.close()
         plt.clf()
 
+    def plot_train_val(self):
+        fig, axs = init_fig()
+        self.dwd_raw.plot_stations(
+            self.train_stations, "o", "C0", ax=axs[0], label="Train"
+        )
+        self.dwd_raw.plot_stations(self.val_stations, "s", "C1", ax=axs[0], label="Val")
+        axs[0].legend()
+        save_plot(self.exp_dir, "train_val_stations", fig)
+
     @cache
     def get_truth(self, dt, station_ids=None):
         df = self.dwd_raw.at_datetime(dt).loc[dt]
@@ -408,14 +421,18 @@ class Sim2RealTrainer(Trainer):
         df = df.set_index([names.lat, names.lon])
         return df
 
+    def _wandb_config(self) -> dict:
+        config = {
+            "opt": asdict(self.opt),
+            "data": asdict(self.data),
+            "model": asdict(self.mspec),
+            "tune": asdict(self.tspec),
+        }
+        return config
 
-if __name__ == "__main__":
-    nums_stations = [20, 100, 500]  # 4, 20, 100, 500?
-    nums_tasks = [400, 2000, 10000]
-    tuners = [TunerType.naive, TunerType.film]
 
+def run_experiments(nums_stations, nums_tasks, tuners):
     tspec = tune
-
     for num_stations, num_tasks, tuner in product(nums_stations, nums_tasks, tuners):
         # TODO: Need to modify LR?
 
@@ -425,3 +442,10 @@ if __name__ == "__main__":
 
         s2r = Sim2RealTrainer(paths, opt, out, data, model, tspec)
         s2r.train()
+
+
+if __name__ == "__main__":
+    nums_stations = [20, 100, 500]  # 4, 20, 100, 500?
+    nums_tasks = [400, 2000, 10000]
+    tuners = [TunerType.naive, TunerType.film]
+    run_experiments(nums_stations, nums_tasks, tuners)

@@ -1,4 +1,5 @@
 # %%
+from dataclasses import asdict
 import xarray as xr
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -199,7 +200,19 @@ class SimTrainer(Trainer):
         plt.close()
         plt.clf()
 
+    def _wandb_config(self) -> dict:
+        config = {
+            "opt": asdict(self.opt),
+            "data": asdict(self.data),
+            "model": asdict(self.mspec),
+        }
+        return config
+
 
 if __name__ == "__main__":
     s = SimTrainer(paths, opt, out, data, model)
-    s.train()
+# %%
+date = s.train_set[0]["time"]
+t = s.task_loader(date, (50, "all"), "all")
+s.plot_prediction(t)
+# s.train()
