@@ -451,16 +451,7 @@ def run_experiments(nums_stations, nums_tasks, tuners):
 
 
 if __name__ == "__main__":
-    nums_stations = [20, 100, 500]  # 4, 20, 100, 500?
-    nums_tasks = [400, 2000, 10000]
+    nums_stations = [500]  # 4, 20, 100, 500?
+    nums_tasks = [400, 80, 16]  # 400, 2000, 10000
     tuners = [TunerType.naive, TunerType.film]
-    #run_experiments(nums_stations, nums_tasks, tuners)
-
-    s2r = Sim2RealTrainer(paths, opt, out, data, model, tune)
-
-    idxs = range(5)
-
-    for idx in idxs:
-        t = s2r.train_set[idx]
-        s2r.plot_example_task(t)
-        s2r.plot_prediction(t)
+    run_experiments(nums_stations, nums_tasks, tuners)
