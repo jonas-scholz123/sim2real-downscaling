@@ -178,9 +178,9 @@ class Trainer(ABC):
 
         return float(mean_batch_loss.detach().cpu().numpy())
 
-    def evaluate(self):
+    def evaluate(self, loader):
         batch_losses = []
-        for i, task in enumerate(self.cv_loader):
+        for i, task in enumerate(loader):
             batch_loss = self.eval_on_batch(task)
             batch_losses.append(batch_loss)
         return np.mean(batch_losses)
@@ -226,7 +226,7 @@ class Trainer(ABC):
 
         if self.start_epoch == 1:
             # Before training, get initial eval and plots.
-            val_loss = self.evaluate()
+            val_loss = self.evaluate(self.cv_loader)
             self._log(0, val_loss, val_loss)
             self.plot_sample_tasks(0)
 
@@ -247,7 +247,7 @@ class Trainer(ABC):
 
             train_loss = np.mean(batch_losses)
             epoch_losses.append(train_loss)
-            val_loss = self.evaluate()
+            val_loss = self.evaluate(self.cv_loader)
             self._save_weights(epoch, val_loss)
             self._log(epoch, train_loss, val_loss)
 
@@ -398,7 +398,7 @@ class Trainer(ABC):
         self.pbar = tqdm(range(self.start_epoch, self.opt.num_epochs + 1))
 
         if self.start_epoch == 1:
-            val_loss = self.evaluate()
+            val_loss = self.evaluate(self.cv_loader)
             self._log(0, val_loss, val_loss)
 
         for epoch in self.pbar:
@@ -423,7 +423,7 @@ class Trainer(ABC):
 
             train_loss = np.mean(batch_losses)
             epoch_losses.append(train_loss)
-            val_lik = self.evaluate()
+            val_lik = self.evaluate(self.cv_loader)
             self._log(epoch, train_loss, val_lik)
             self._save_weights(epoch, val_lik)
 
