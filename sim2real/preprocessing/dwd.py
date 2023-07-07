@@ -6,10 +6,12 @@ import pandas as pd
 from tqdm import tqdm
 from zipfile import ZipFile, BadZipFile
 import geopandas as gpd
+import numpy as np
 
 from sim2real.config import data, paths, names
+from sim2real.plots import init_fig
 from sim2real.utils import ensure_dir_exists
-from sim2real.datasets import DWDSTationData
+from sim2real.datasets import DWDSTationData, load_station_splits
 
 
 fnames = [
@@ -815,8 +817,9 @@ def station_sampling_plot():
     save_plot(None, "station_sampling", fig)
 
 
-def save_station_splits():
+def save_station_splits(mode="random"):
     num_val_stations = 50
+    np.random.seed(42)
 
     dwd = DWDSTationData(paths)
     gdf = dwd.full().groupby(names.station_id).first()
@@ -834,8 +837,15 @@ def save_station_splits():
 
     # Define validation stations.
     gdf = gdf.query(f"{names.station_id} in @station_ids")
-    dm = distance_matrix(gdf, gdf)
-    val_station_ids = pick_stations([next(iter(station_ids))], dm, num_val_stations - 1)
+
+    if mode == "random":
+        val_station_ids = np.random.choice(list(station_ids), num_val_stations)
+    else:
+        dm = distance_matrix(gdf, gdf)
+        val_station_ids = pick_stations(
+            [next(iter(station_ids))], dm, num_val_stations - 1
+        )
+
     sdf.loc[val_station_ids, "SET"] = "VAL"
     sdf.loc[val_station_ids, "ORDER"] = list(range(len(val_station_ids)))
 
@@ -843,12 +853,16 @@ def save_station_splits():
     station_ids = station_ids - set(val_station_ids)
     gdf = gdf.query(f"{names.station_id} in @station_ids")
 
-    # Define train stations.
-    dm = distance_matrix(gdf, gdf)
-    num_train_stations = len(station_ids)
-    train_station_ids = pick_stations(
-        [next(iter(station_ids))], dm, num_train_stations - 1
-    )
+    if mode == "random":
+        train_station_ids = list(station_ids)
+        np.random.shuffle(train_station_ids)
+    else:
+        # Define train stations.
+        dm = distance_matrix(gdf, gdf)
+        num_train_stations = len(station_ids)
+        train_station_ids = pick_stations(
+            [next(iter(station_ids))], dm, num_train_stations - 1
+        )
     sdf.loc[train_station_ids, "SET"] = "TRAIN"
     sdf.loc[train_station_ids, "ORDER"] = list(range(len(train_station_ids)))
     sdf = sdf.reset_index()
@@ -871,8 +885,22 @@ def save_datetime_splits():
     df.to_feather(paths.time_split)
 
 
+def plot_train_val(train, val):
+    fig, axs = init_fig()
+    dwd = DWDSTationData(paths)
+    dwd.plot_stations(train, "o", "C0", ax=axs[0], label="Train")
+    dwd.plot_stations(val, "s", "C1", ax=axs[0], label="Val")
+    axs[0].legend()
+
+
 if __name__ == "__main__":
     process_value_stations()
-    # save_station_splits()
+    save_station_splits("random")
     # datetime_split_plot()
-    save_datetime_splits()
+    # save_datetime_splits()
+    ss = load_station_splits()
+    lim = 500
+    train = ss[ss["SET"] == "TRAIN"].sort_values("ORDER")[0:lim].index
+    val = ss[ss["SET"] == "VAL"].sort_values("ORDER")[0 : lim // 10].index
+
+    plot_train_val(train, val)
