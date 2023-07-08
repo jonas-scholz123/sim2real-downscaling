@@ -26,7 +26,7 @@ def naive_tuner(model: nn.Module, tspec: TuneSpec) -> nn.Module:
 def long_range_tuner(model: nn.Module, tspec: TuneSpec) -> nn.Module:
     level = tspec.frequency_level
     # Start: tune everything.
-    model = naive_tuner(model)
+    model = naive_tuner(model, tspec)
 
     # Don't tune high-frequency layers
     for module in model.decoder[0].before_turn_layers[:level]:

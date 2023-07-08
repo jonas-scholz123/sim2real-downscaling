@@ -495,13 +495,5 @@ def run_experiments(nums_stations, nums_tasks, tuners):
 if __name__ == "__main__":
     nums_stations = [500, 100, 20]  # 4, 20, 100, 500?
     nums_tasks = [400]  # 400, 80, 16
-    tuners = [TunerType.naive, TunerType.film]
-    # run_experiments(nums_stations, nums_tasks, tuners)
-
-    s2r = Sim2RealTrainer(paths, opt, out, data, model, tune)
-
-# %%
-i = 1
-
-for module in s2r.model.model.decoder[0].before_turn_layers[i:]:
-    module.requires_grad_(True)
+    tuners = [TunerType.long_range]
+    run_experiments(nums_stations, nums_tasks, tuners)
