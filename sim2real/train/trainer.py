@@ -366,19 +366,8 @@ class Trainer(ABC):
             )
 
     def _log(self):
-        # {
-        #    "train_loss": train_loss,
-        #    "val_loss": val_loss,
-        #    "best_val_loss": self.best_val_loss,
-        # }
-
-        # {
-        #    "epoch": epoch,
-        #    "train_loss": train_loss,
-        #    "val_loss": val_loss,
-        #    "best_val_loss": self.best_val_loss,
-        # }
         self.compute_additional_metrics()
+        self.metrics["best_val_loss"] = self.best_val_loss
         self.pbar.set_postfix(self.metrics)
         if self.out.wandb:
             self.wandb.log(self.metrics)
