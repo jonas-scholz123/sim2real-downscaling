@@ -31,6 +31,8 @@ def long_range_tuner(model: nn.Module, tspec: TuneSpec) -> nn.Module:
     # Don't tune high-frequency layers
     for module in model.decoder[0].before_turn_layers[:level]:
         module.requires_grad_(False)
-    for module in model.decoder[0].after_turn_layers[level:]:
+
+    # NOTE: The :level slicing is correct because we go through these layers backwards!
+    for module in model.decoder[0].after_turn_layers[:level]:
         module.requires_grad_(False)
     return model
