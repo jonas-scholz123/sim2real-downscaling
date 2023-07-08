@@ -39,7 +39,7 @@ from sim2real.config import (
 from sim2real.plots import init_fig
 from sim2real.train.taskset import Taskset
 from sim2real.train.trainer import Trainer
-from sim2real.train.tuners import film_tuner, naive_tuner
+from sim2real.train.tuners import film_tuner, long_range_tuner, naive_tuner
 from sim2real.utils import (
     exp_dir_sim,
     exp_dir_sim2real,
@@ -107,10 +107,12 @@ class Sim2RealTrainer(Trainer):
             tuner = naive_tuner
         elif self.tspec.tuner == TunerType.film:
             tuner = film_tuner
+        elif self.tspec.tuner == TunerType.long_range:
+            tuner = long_range_tuner
         else:
             raise NotImplementedError(f"Tuner {self.tspec.tuner} not yet implemented.")
 
-        self.model.model = tuner(self.model.model)
+        self.model.model = tuner(self.model.model, self.tspec)
 
     def _load_initial_weights(self):
         if self.loaded_checkpoint:
@@ -494,4 +496,12 @@ if __name__ == "__main__":
     nums_stations = [500, 100, 20]  # 4, 20, 100, 500?
     nums_tasks = [400]  # 400, 80, 16
     tuners = [TunerType.naive, TunerType.film]
-    run_experiments(nums_stations, nums_tasks, tuners)
+    # run_experiments(nums_stations, nums_tasks, tuners)
+
+    s2r = Sim2RealTrainer(paths, opt, out, data, model, tune)
+
+# %%
+i = 1
+
+for module in s2r.model.model.decoder[0].before_turn_layers[i:]:
+    module.requires_grad_(True)

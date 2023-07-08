@@ -111,6 +111,7 @@ class OptimSpec:
 class TunerType(Enum):
     naive = 0
     film = 1
+    long_range = 2
 
 
 @dataclass
@@ -122,6 +123,7 @@ class TuneSpec:
     val_frac_times: float
     split: bool
     frac_power: int
+    frequency_level: int
 
 
 # Inferred from ERA5 data and pasted here.
@@ -192,7 +194,7 @@ data = DataSpec(
 
 pretrain_opt = OptimSpec(
     seed=42,
-    device="cpu",
+    device="cuda",
     batch_size=16,
     batch_size_val=512,
     batches_per_epoch=200,
@@ -206,10 +208,10 @@ pretrain_opt = OptimSpec(
 
 tune_opt = OptimSpec(
     seed=42,
-    device="cpu",
+    device="cuda",
     batch_size=16,
     batch_size_val=512,
-    batches_per_epoch=5,
+    batches_per_epoch=25,
     num_epochs=50,
     lr=3e-5,
     start_from=None,  # None, "best", "latest"
@@ -236,7 +238,7 @@ model = ModelSpec(
 )
 
 out = OutputSpec(
-    wandb=False,
+    wandb=True,
     plots=True,
     wandb_name=None,
     fig_crs=ccrs.TransverseMercator(central_longitude=10, approx=False),
@@ -254,4 +256,5 @@ tune = TuneSpec(
     split=True,
     # How much should sparse tasks be preferred? Larger => more sparse tasks.
     frac_power=2,
+    frequency_level=2,
 )
