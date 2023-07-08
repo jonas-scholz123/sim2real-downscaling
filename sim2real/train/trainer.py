@@ -77,6 +77,8 @@ class Trainer(ABC):
         data: DataSpec,
         mspec: ModelSpec,
     ) -> None:
+        self.metrics = {}
+
         self.paths = paths
         self.opt = opt
         self.out = out
@@ -96,6 +98,9 @@ class Trainer(ABC):
             # Can't do this with MPS (need to change the deepsensor __init__ file).
             B.set_global_device(self.opt.device)
             torch.set_default_device(self.opt.device)
+            self.gen = torch.Generator(device="cuda")
+        else:
+            self.gen = torch.Generator()
 
         self.data_processor = self._init_data_processor()
         self._init_dataloaders()
@@ -125,39 +130,24 @@ class Trainer(ABC):
         """
         return
 
+    def _to_dataloader(self, dataset, batch_size, shuffle=False):
+        return DataLoader(
+            dataset,
+            batch_size=batch_size,
+            shuffle=shuffle,
+            # Don't turn into pytorch tensors. We just want the sampling functionality.
+            collate_fn=lambda x: x,
+            generator=self.gen,
+        )
+
     def _init_dataloaders(self):
         self.train_set, self.val_set, self.test_set = self._init_tasksets()
 
-        if self.opt.device == "cuda":
-            gen = torch.Generator(device="cuda")
-        else:
-            gen = torch.Generator()
-
-        # Don't turn into pytorch tensors. We just want the sampling functionality.
-        collate_fn = lambda x: x
-        self.train_loader = DataLoader(
-            self.train_set,
-            shuffle=True,
-            batch_size=self.opt.batch_size,
-            collate_fn=collate_fn,
-            generator=gen,
+        self.train_loader = self._to_dataloader(
+            self.train_set, self.opt.batch_size, shuffle=True
         )
-
-        self.cv_loader = DataLoader(
-            self.val_set,
-            shuffle=False,
-            batch_size=self.opt.batch_size_val,
-            collate_fn=collate_fn,
-            generator=gen,
-        )
-
-        self.test_loader = DataLoader(
-            self.test_set,
-            shuffle=False,
-            batch_size=self.opt.batch_size_val,
-            collate_fn=collate_fn,
-            generator=gen,
-        )
+        self.cv_loader = self._to_dataloader(self.val_set, self.opt.batch_size_val)
+        self.test_loader = self._to_dataloader(self.test_set, self.opt.batch_size_val)
 
     def _set_seeds(self):
         B.set_random_seed(self.opt.seed)
@@ -227,7 +217,10 @@ class Trainer(ABC):
         if self.start_epoch == 1:
             # Before training, get initial eval and plots.
             val_loss = self.evaluate(self.cv_loader)
-            self._log(0, val_loss, val_loss)
+            self.metrics[names.val_loss] = val_loss
+            self.metrics[names.train_loss] = val_loss
+            self.metrics[names.epoch] = 0
+            self._log()
             self.plot_sample_tasks(0)
 
         for epoch in self.pbar:
@@ -249,7 +242,10 @@ class Trainer(ABC):
             epoch_losses.append(train_loss)
             val_loss = self.evaluate(self.cv_loader)
             self._save_weights(epoch, val_loss)
-            self._log(epoch, train_loss, val_loss)
+            self.metrics[names.val_loss] = val_loss
+            self.metrics[names.train_loss] = train_loss
+            self.metrics[names.epoch] = epoch
+            self._log()
 
             if self.out.plots:
                 self.plot_sample_tasks(epoch)
@@ -369,23 +365,29 @@ class Trainer(ABC):
                 reinit=True,
             )
 
-    def _log(self, epoch, train_loss, val_loss):
-        self.pbar.set_postfix(
-            {
-                "train_loss": train_loss,
-                "val_loss": val_loss,
-                "best_val_loss": self.best_val_loss,
-            }
-        )
+    def _log(self):
+        # {
+        #    "train_loss": train_loss,
+        #    "val_loss": val_loss,
+        #    "best_val_loss": self.best_val_loss,
+        # }
+
+        # {
+        #    "epoch": epoch,
+        #    "train_loss": train_loss,
+        #    "val_loss": val_loss,
+        #    "best_val_loss": self.best_val_loss,
+        # }
+        self.compute_additional_metrics()
+        self.pbar.set_postfix(self.metrics)
         if self.out.wandb:
-            self.wandb.log(
-                {
-                    "epoch": epoch,
-                    "train_loss": train_loss,
-                    "val_loss": val_loss,
-                    "best_val_loss": self.best_val_loss,
-                }
-            )
+            self.wandb.log(self.metrics)
+
+    def compute_additional_metrics(self):
+        """
+        Add additional custom entries to self.metrics that get logged.
+        """
+        return
 
     def overfit_train(self):
         """
@@ -399,7 +401,10 @@ class Trainer(ABC):
 
         if self.start_epoch == 1:
             val_loss = self.evaluate(self.cv_loader)
-            self._log(0, val_loss, val_loss)
+            self.metrics[names.val_loss] = val_loss
+            self.metrics[names.train_loss] = val_loss
+            self.metrics[names.epoch] = 0
+            self._log()
 
         for epoch in self.pbar:
             batch_losses = []
@@ -424,7 +429,10 @@ class Trainer(ABC):
             train_loss = np.mean(batch_losses)
             epoch_losses.append(train_loss)
             val_lik = self.evaluate(self.cv_loader)
-            self._log(epoch, train_loss, val_lik)
+            self.metrics[names.val_loss] = val_lik
+            self.metrics[names.train_loss] = train_loss
+            self.metrics[names.epoch] = epoch
+            self._log()
             self._save_weights(epoch, val_lik)
 
     def plot_sample_tasks(self, epoch):

@@ -2,7 +2,7 @@
 import copy
 from dataclasses import asdict
 from itertools import product
-from typing import Tuple, Union
+from typing import Dict, Tuple, Union
 import xarray as xr
 import pandas as pd
 import geopandas as gpd
@@ -154,6 +154,7 @@ class Sim2RealTrainer(Trainer):
         set_task_loader: bool = False,
         deterministic: bool = False,
         split: bool = False,
+        frac_power: int = 1,
     ):
         c_df, _ = split_df(self.full, times, c_stations)
         t_df, _ = split_df(self.full, times, t_stations)
@@ -205,7 +206,7 @@ class Sim2RealTrainer(Trainer):
             datetimes=dts,
             deterministic=deterministic,
             split=split,
-            frac_power=self.tspec.frac_power,
+            frac_power=frac_power,
         )
 
     def _init_tasksets(self) -> Tuple[Taskset, Taskset, Taskset]:
@@ -246,6 +247,7 @@ class Sim2RealTrainer(Trainer):
             set_task_loader=False,
             deterministic=False,
             split=True,
+            frac_power=self.tspec.frac_power,
         )
 
         val = self.gen_trainset(
@@ -255,6 +257,29 @@ class Sim2RealTrainer(Trainer):
             "all",
             self.val_dates,
             set_task_loader=True,
+            deterministic=True,
+            split=False,
+        )
+
+        # Train stations at val times.
+        temporal_val = self.gen_trainset(
+            train_stations,
+            (0.9, 0.9),
+            train_stations,
+            # This is overwritten and doesn't matter:
+            "split",
+            self.val_dates,
+            deterministic=True,
+            split=True,
+            frac_power=1,
+        )
+
+        spatial_val = self.gen_trainset(
+            train_stations,
+            "all",
+            val_stations,
+            "all",
+            self.train_dates,
             deterministic=True,
             split=False,
         )
@@ -273,6 +298,13 @@ class Sim2RealTrainer(Trainer):
         self.train_stations = train_stations
         self.val_stations = val_stations
         self.test_stations = test_stations
+
+        self.temporal_val_loader = self._to_dataloader(
+            temporal_val, self.opt.batch_size_val
+        )
+        self.spatial_val_loader = self._to_dataloader(
+            spatial_val, self.opt.batch_size_val
+        )
 
         return train, val, test
 
@@ -435,6 +467,14 @@ class Sim2RealTrainer(Trainer):
             "tune": asdict(self.tspec),
         }
         return config
+
+    def compute_additional_metrics(self):
+        """
+        Add additional custom entries to self.metrics that get logged.
+        """
+        self.metrics[names.val_spatial_loss] = self.evaluate(self.spatial_val_loader)
+        self.metrics[names.val_temporal_loss] = self.evaluate(self.temporal_val_loader)
+        return
 
 
 def run_experiments(nums_stations, nums_tasks, tuners):

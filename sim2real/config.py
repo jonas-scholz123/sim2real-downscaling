@@ -76,6 +76,11 @@ class Names:
     test: str
     set: str
     order: str
+    epoch: str
+    train_loss: str
+    val_loss: str
+    val_temporal_loss: str
+    val_spatial_loss: str
 
 
 @dataclass
@@ -144,6 +149,11 @@ names = Names(
     test="TEST",
     set="SET",
     order="ORDER",
+    val_loss="val_loss",
+    val_spatial_loss="val_spatial_loss",
+    val_temporal_loss="val_temporal_loss",
+    train_loss="train_loss",
+    epoch="epoch",
 )
 
 root = str(Path(__file__).parent.parent.resolve())
@@ -182,7 +192,7 @@ data = DataSpec(
 
 pretrain_opt = OptimSpec(
     seed=42,
-    device="cuda",
+    device="cpu",
     batch_size=16,
     batch_size_val=512,
     batches_per_epoch=200,
@@ -196,10 +206,10 @@ pretrain_opt = OptimSpec(
 
 tune_opt = OptimSpec(
     seed=42,
-    device="cuda",
+    device="cpu",
     batch_size=16,
     batch_size_val=512,
-    batches_per_epoch=100,
+    batches_per_epoch=5,
     num_epochs=50,
     lr=3e-5,
     start_from=None,  # None, "best", "latest"
@@ -226,7 +236,7 @@ model = ModelSpec(
 )
 
 out = OutputSpec(
-    wandb=True,
+    wandb=False,
     plots=True,
     wandb_name=None,
     fig_crs=ccrs.TransverseMercator(central_longitude=10, approx=False),
