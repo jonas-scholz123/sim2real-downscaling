@@ -491,7 +491,7 @@ def run_experiments(nums_stations, nums_tasks, tuners):
 
 
 if __name__ == "__main__":
-    nums_stations = [500]  # 4, 20, 100, 500?
-    nums_tasks = [400, 80, 16]  # 400, 2000, 10000
+    nums_stations = [500, 100, 20]  # 4, 20, 100, 500?
+    nums_tasks = [400]  # 400, 80, 16
     tuners = [TunerType.naive, TunerType.film]
     run_experiments(nums_stations, nums_tasks, tuners)
