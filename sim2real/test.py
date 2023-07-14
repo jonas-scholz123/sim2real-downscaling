@@ -165,7 +165,9 @@ class Evaluator(Sim2RealTrainer):
             "num_tasks": tspec.num_tasks,
             "tuner": str(tspec.tuner),
         }
-        self.res = self.res.append(record, ignore_index=True)
+
+        idx = 0 if self.res.empty else self.res.index.max() + 1
+        self.res.loc[idx] = record
 
     def _init_weights(self, tspec):
         exp_dir = exp_dir_sim2real(self.mspec, tspec)
