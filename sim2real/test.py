@@ -207,10 +207,10 @@ def generate_tspecs(init_tspec, nums_stations, nums_tasks, tuners):
     return tspecs
 
 
-num_samples = 5
+num_samples = 1024
 
 nums_stations = [500, 100, 20]  # 4, 20, 100, 500?
-nums_tasks = [400]  # 400, 80, 16
+nums_tasks = [400, 80, 16]  # 400, 80, 16
 tuners = [TunerType.naive, TunerType.film, TunerType.long_range]
 
 out.wandb = False
