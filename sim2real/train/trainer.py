@@ -168,9 +168,9 @@ class Trainer(ABC):
 
         return float(mean_batch_loss.detach().cpu().numpy())
 
-    def evaluate(self, loader):
+    def compute_loglik(self, loader):
         batch_losses = []
-        for i, task in enumerate(loader):
+        for i, task in tqdm(enumerate(loader)):
             batch_loss = self.eval_on_batch(task)
             batch_losses.append(batch_loss)
         return np.mean(batch_losses)
@@ -216,7 +216,7 @@ class Trainer(ABC):
 
         if self.start_epoch == 1:
             # Before training, get initial eval and plots.
-            val_loss = self.evaluate(self.cv_loader)
+            val_loss = self.compute_loglik(self.cv_loader)
             self.metrics[names.val_loss] = val_loss
             self.metrics[names.train_loss] = val_loss
             self.metrics[names.epoch] = 0
@@ -240,7 +240,7 @@ class Trainer(ABC):
 
             train_loss = np.mean(batch_losses)
             epoch_losses.append(train_loss)
-            val_loss = self.evaluate(self.cv_loader)
+            val_loss = self.compute_loglik(self.cv_loader)
             self._save_weights(epoch, val_loss)
             self.metrics[names.val_loss] = val_loss
             self.metrics[names.train_loss] = train_loss
@@ -389,7 +389,7 @@ class Trainer(ABC):
         self.pbar = tqdm(range(self.start_epoch, self.opt.num_epochs + 1))
 
         if self.start_epoch == 1:
-            val_loss = self.evaluate(self.cv_loader)
+            val_loss = self.compute_loglik(self.cv_loader)
             self.metrics[names.val_loss] = val_loss
             self.metrics[names.train_loss] = val_loss
             self.metrics[names.epoch] = 0
@@ -417,7 +417,7 @@ class Trainer(ABC):
 
             train_loss = np.mean(batch_losses)
             epoch_losses.append(train_loss)
-            val_lik = self.evaluate(self.cv_loader)
+            val_lik = self.compute_loglik(self.cv_loader)
             self.metrics[names.val_loss] = val_lik
             self.metrics[names.train_loss] = train_loss
             self.metrics[names.epoch] = epoch

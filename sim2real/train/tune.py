@@ -44,6 +44,8 @@ from sim2real.utils import (
     exp_dir_sim,
     exp_dir_sim2real,
     load_weights,
+    sample_dates,
+    sample_stations,
     weight_dir,
     split_df,
     ensure_exists,
@@ -55,28 +57,6 @@ from sim2real.datasets import (
     load_station_splits,
     load_time_splits,
 )
-
-
-def sample_dates(time_split, set_name, num, seed=42):
-    """
-    Randomly sample num dates from time_split from the right set.
-    """
-    df = time_split[time_split[names.set] == set_name]
-
-    if num > df.shape[0]:
-        return df.index.sort_values()
-    return df.sample(num, random_state=seed).index.sort_values()
-
-
-def sample_stations(station_split, set_name, num):
-    """
-    Deterministically take the first num stations in a predefined order.
-    """
-    return list(
-        station_split[station_split[names.set] == set_name]
-        .sort_values(names.order)
-        .index[:num]
-    )
 
 
 class Sim2RealTrainer(Trainer):
@@ -451,12 +431,10 @@ class Sim2RealTrainer(Trainer):
         axs[0].legend()
         save_plot(self.exp_dir, "train_val_stations", fig)
 
-    @cache
     def get_truth(self, dt, station_ids=None):
         df = self.dwd_raw.at_datetime(dt).loc[dt]
         if station_ids is not None:
-            val_stations = self.val_stations
-            df = df.query(f"{names.station_id} in @val_stations")
+            df = df.query(f"{names.station_id} in @station_ids")
         df = df.reset_index()[[names.lat, names.lon, "geometry", names.temp]]
         df = df.set_index([names.lat, names.lon])
         return df
@@ -474,11 +452,16 @@ class Sim2RealTrainer(Trainer):
         """
         Add additional custom entries to self.metrics that get logged.
         """
-        self.metrics[names.val_spatial_loss] = self.evaluate(self.spatial_val_loader)
-        self.metrics[names.val_temporal_loss] = self.evaluate(self.temporal_val_loader)
+        self.metrics[names.val_spatial_loss] = self.compute_loglik(
+            self.spatial_val_loader
+        )
+        self.metrics[names.val_temporal_loss] = self.compute_loglik(
+            self.temporal_val_loader
+        )
         return
 
 
+# TODO: Should use generate_tspecs.
 def run_experiments(nums_stations, nums_tasks, tuners):
     tspec = tune
     for num_stations, num_tasks, tuner in product(nums_stations, nums_tasks, tuners):

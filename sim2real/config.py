@@ -19,6 +19,7 @@ class Paths:
     station_split: str
     time_split: str
     out: str
+    test_results: str
 
 
 @dataclass
@@ -173,6 +174,7 @@ paths = Paths(
     station_split=f"{root}/data/processed/splits/stations.feather",
     time_split=f"{root}/data/processed/splits/times.feather",
     out=f"{root}/_outputs",
+    test_results=f"{root}/_outputs/test_results.csv",
 )
 
 data = DataSpec(
@@ -256,5 +258,5 @@ tune = TuneSpec(
     split=True,
     # How much should sparse tasks be preferred? Larger => more sparse tasks.
     frac_power=2,
-    frequency_level=2,
+    frequency_level=4,
 )

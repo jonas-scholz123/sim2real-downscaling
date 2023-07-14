@@ -96,3 +96,25 @@ def split_df(df, dts, station_ids) -> Tuple[pd.DataFrame]:
     )
 
     return split, remainder
+
+
+def sample_dates(time_split, set_name, num, seed=42):
+    """
+    Randomly sample num dates from time_split from the right set.
+    """
+    df = time_split[time_split[names.set] == set_name]
+
+    if num > df.shape[0]:
+        return df.index.sort_values()
+    return df.sample(num, random_state=seed).index.sort_values()
+
+
+def sample_stations(station_split, set_name, num):
+    """
+    Deterministically take the first num stations in a predefined order.
+    """
+    return list(
+        station_split[station_split[names.set] == set_name]
+        .sort_values(names.order)
+        .index[:num]
+    )
