@@ -10,7 +10,7 @@ from torch.utils.data import DataLoader
 
 from tqdm import tqdm
 from sim2real.datasets import load_station_splits, load_time_splits
-from sim2real.plots import init_fig
+from sim2real.plots import init_fig, save_plot
 from sim2real.train.tune import Sim2RealTrainer
 from sim2real.config import (
     DataSpec,
@@ -55,10 +55,14 @@ class Evaluator(Sim2RealTrainer):
 
         nlls = self.evaluate_loglik(self.test_set)
         self._set_result(tspec, "nll", np.mean(nlls))
+        self._set_result(tspec, "nll_std", np.std(nlls) / np.sqrt(len(nlls)))
 
         df = self.deterministic_results(self.test_set)
+        sqrt_N = np.sqrt(df.shape[0])
         mae = (df["T2M_pred"] - df["T2M_truth"]).abs().mean()
         self._set_result(tspec, "mae", mae)
+        mae_std = (df["T2M_pred"] - df["T2M_truth"]).abs().std() / sqrt_N
+        self._set_result(tspec, "mae_std", mae_std)
 
         return df, nlls
 
@@ -201,12 +205,13 @@ def generate_tspecs(init_tspec, nums_stations, nums_tasks, tuners):
     return tspecs
 
 
-num_samples = 500
+num_samples = 5
 
 nums_stations = [500, 100, 20]  # 4, 20, 100, 500?
 nums_tasks = [400]  # 400, 80, 16
 tuners = [TunerType.naive, TunerType.film, TunerType.long_range]
 
+out.wandb = False
 e = Evaluator(paths, opt, out, data, model, tune, num_samples)
 # %%
 tspecs = generate_tspecs(tune, nums_stations, nums_tasks, tuners)
@@ -231,14 +236,14 @@ for tspec in tqdm(tspecs):
         # e.save()
     except FileNotFoundError:
         continue
-# %%
-e.res
+e.save()
 # %%
 diffs = [el["T2M_pred"] - el["T2M_truth"] for el in det_results]
 names = [f"N={s.num_stations} {str(s.tuner)[10:]}" for s in tspecs]
 fig, ax = plt.subplots(1, 1)
 ax.boxplot(diffs)
 ax.set_xticklabels(names, rotation=60)
+save_plot(None, "error_boxplots", fig=fig)
 # %%
 # fig, axs = plt.subplots(1, 3)
 
@@ -247,4 +252,9 @@ for diff, name in zip(diffs[:lim], names[:lim]):
     plt.hist(diff, bins=30, label=name, alpha=0.5)
 plt.legend()
 # %%
-plt.hist(nll_results[0], bins=10)
+fig, ax = plt.subplots(1, 1)
+ax.hist(nll_results[0], bins=30)
+ax.set_xlabel("NLL")
+ax.set_ylabel("Count")
+ax.set_title("NLL Distribution")
+save_plot(None, "nll_hist_tuned", fig=fig)
