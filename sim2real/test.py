@@ -31,6 +31,7 @@ from sim2real.config import (
 from sim2real.utils import (
     ensure_dir_exists,
     exp_dir_sim2real,
+    exp_dir_sim,
     load_weights,
     sample_dates,
     sample_stations,
@@ -45,7 +46,37 @@ class Evaluator(Sim2RealTrainer):
         self.num_samples = num_samples
         self._load_results()
 
-    def evaluate_model(self, tspec: TuneSpec):
+    def evaluate_era5_baseline(self, tspec: TuneSpec):
+        # Load weights
+        exp_dir = exp_dir_sim(self.mspec)
+        best_path = f"{weight_dir(exp_dir)}/best.h5"
+
+        self.model.model, _, _ = load_weights(self.model.model, best_path)
+        print(f"Loaded best ERA5 weights from {best_path}.")
+        self.model.model = self.model.model.to(self.opt.device)
+
+        self.test_loader = self._init_testloader(tspec)
+
+        nlls = self.evaluate_loglik(self.test_set)
+
+        # No station tasks were used for training.
+        tspec.num_tasks = 0
+        tspec.tuner = TunerType.none
+
+        self._set_result(tspec, "nll", np.mean(nlls))
+        self._set_result(tspec, "nll", np.mean(nlls))
+        self._set_result(tspec, "nll_std", np.std(nlls) / np.sqrt(len(nlls)))
+
+        df = self.deterministic_results(self.test_set)
+        sqrt_N = np.sqrt(df.shape[0])
+        mae = (df["T2M_pred"] - df["T2M_truth"]).abs().mean()
+        self._set_result(tspec, "mae", mae)
+        mae_std = (df["T2M_pred"] - df["T2M_truth"]).abs().std() / sqrt_N
+        self._set_result(tspec, "mae_std", mae_std)
+
+        return df, nlls
+
+    def evaluate_model(self, tspec: TuneSpec, era5_baseline=False):
         # Load the right weights.
         self._init_weights(tspec)
 
@@ -147,6 +178,37 @@ class Evaluator(Sim2RealTrainer):
 
         return self._to_dataloader(self.test_set, self.num_samples)
 
+    def _set_era5_result(self, tspec: TuneSpec, key, val):
+        self._set_result_inner(
+            tspec.num_stations,
+            tspec.num_tasks,
+            str(tspec.tuner),
+            key,
+            val,
+        )
+
+    def _set_result_inner(self, num_stations, num_tasks, tuner, key, val):
+        df = self.res
+        df = df[df["num_stations"] == num_stations]
+        df = df[df["num_tasks"] == num_tasks]
+        df = df[df["tuner"] == tuner]
+
+        if not df.empty:
+            idx = df.index[0]
+            self.res.loc[idx, key] = val
+            return
+
+        # Otherwise, need to create new row.
+        record = {
+            key: val,
+            "num_stations": num_stations,
+            "num_tasks": num_tasks,
+            "tuner": tuner,
+        }
+
+        idx = 0 if self.res.empty else self.res.index.max() + 1
+        self.res.loc[idx] = record
+
     def _set_result(self, tspec: TuneSpec, key, val):
         df = self.res
         df = df[df["num_stations"] == tspec.num_stations]
@@ -194,6 +256,20 @@ class Evaluator(Sim2RealTrainer):
 
 def generate_tspecs(init_tspec, nums_stations, nums_tasks, tuners):
     tspecs = []
+
+    if TunerType.none in tuners:
+        for num_stations in nums_stations:
+            # Make a copy of the initial tspec.
+            tspec = replace(init_tspec)
+
+            # Modify.
+            tspec.num_stations = num_stations
+            tspec.tuner = TunerType.none
+
+            tspecs.append(tspec)
+
+        tuners = [t for t in tuners if t != TunerType.none]
+
     for num_stations, num_tasks, tuner in product(nums_stations, nums_tasks, tuners):
         # Make a copy of the initial tspec.
         tspec = replace(init_tspec)
@@ -211,7 +287,7 @@ num_samples = 1024
 
 nums_stations = [500, 100, 20]  # 4, 20, 100, 500?
 nums_tasks = [400, 80, 16]  # 400, 80, 16
-tuners = [TunerType.naive, TunerType.film, TunerType.long_range]
+tuners = [TunerType.none]
 
 out.wandb = False
 e = Evaluator(paths, opt, out, data, model, tune, num_samples)
@@ -224,9 +300,16 @@ nll_results = []
 for tspec in tqdm(tspecs):
     try:
         print(f"N={tspec.num_stations}, M={tspec.num_tasks}, Tuner={tspec.tuner}")
+        if tspec.tuner == TunerType.none:
+            det_result, nlls = e.evaluate_era5_baseline(tspec)
+            det_results.append(det_result)
+            nll_results.append(nlls)
+            continue
+
         det_result, nlls = e.evaluate_model(tspec)
         det_results.append(det_result)
         nll_results.append(nlls)
+
         # e.plot_locations(
         #    [e.train_stations, e.val_stations, e.test_stations],
         #    labels=["Train", "Val", "Test"],
@@ -240,23 +323,25 @@ for tspec in tqdm(tspecs):
         continue
 e.save()
 # %%
-diffs = [el["T2M_pred"] - el["T2M_truth"] for el in det_results]
-names = [f"N={s.num_stations} {str(s.tuner)[10:]}" for s in tspecs]
-fig, ax = plt.subplots(1, 1)
-ax.boxplot(diffs)
-ax.set_xticklabels(names, rotation=60)
-save_plot(None, "error_boxplots", fig=fig)
-# %%
-# fig, axs = plt.subplots(1, 3)
-
-lim = 2
-for diff, name in zip(diffs[:lim], names[:lim]):
-    plt.hist(diff, bins=30, label=name, alpha=0.5)
-plt.legend()
-# %%
-fig, ax = plt.subplots(1, 1)
-ax.hist(nll_results[0], bins=30)
-ax.set_xlabel("NLL")
-ax.set_ylabel("Count")
-ax.set_title("NLL Distribution")
-save_plot(None, "nll_hist_tuned", fig=fig)
+e.res.set_index(["num_stations", "num_tasks", "tuner"])
+## %%
+# diffs = [el["T2M_pred"] - el["T2M_truth"] for el in det_results]
+# names = [f"N={s.num_stations} {str(s.tuner)[10:]}" for s in tspecs]
+# fig, ax = plt.subplots(1, 1)
+# ax.boxplot(diffs)
+# ax.set_xticklabels(names, rotation=60)
+# save_plot(None, "error_boxplots", fig=fig)
+## %%
+## fig, axs = plt.subplots(1, 3)
+#
+# lim = 2
+# for diff, name in zip(diffs[:lim], names[:lim]):
+#    plt.hist(diff, bins=30, label=name, alpha=0.5)
+# plt.legend()
+## %%
+# fig, ax = plt.subplots(1, 1)
+# ax.hist(nll_results[1], bins=30)
+# ax.set_xlabel("NLL")
+# ax.set_ylabel("Count")
+# ax.set_title("NLL Distribution")
+# save_plot(None, "nll_hist_tuned", fig=fig)

@@ -113,6 +113,7 @@ class TunerType(Enum):
     naive = 0
     film = 1
     long_range = 2
+    none = 3
 
 
 @dataclass
