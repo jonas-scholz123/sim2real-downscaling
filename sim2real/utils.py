@@ -95,7 +95,7 @@ def split_df(df, dts, station_ids) -> Tuple[pd.DataFrame]:
 
     split = df.query(f"{names.station_id} in @station_ids and {names.time} in @dts")
     remainder = df.query(
-        f"{names.station_id} not in @sttion_ids and {names.time} not in @dts"
+        f"{names.station_id} not in @station_ids and {names.time} not in @dts"
     )
 
     return split, remainder
