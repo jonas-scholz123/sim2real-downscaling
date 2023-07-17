@@ -265,12 +265,13 @@ class Sim2RealTrainer(Trainer):
             frac_power=1,
         )
 
+        spatial_val_dates = sample_dates(time_split, names.train, m_val)
         spatial_val = self.gen_trainset(
             train_stations,
             "all",
             val_stations,
             "all",
-            self.train_dates,
+            spatial_val_dates,
             deterministic=True,
             split=False,
         )
