@@ -1,5 +1,6 @@
 # %%
 
+import copy
 from matplotlib import pyplot as plt
 import numpy as np
 import pandas as pd
@@ -76,7 +77,7 @@ class Evaluator(Sim2RealTrainer):
 
         return df, nlls
 
-    def evaluate_model(self, tspec: TuneSpec, era5_baseline=False):
+    def evaluate_model(self, tspec: TuneSpec):
         # Load the right weights.
         self._init_weights(tspec)
 
@@ -128,10 +129,13 @@ class Evaluator(Sim2RealTrainer):
         try:
             self.res = pd.read_csv(self.results_path)
             print(f"Loaded previous results from {self.results_path}")
+
+            if "pretrained" not in self.res.columns:
+                self.res["pretrained"] = True
         except FileNotFoundError:
             print("No previous results file exists, creating empty DataFrame.")
             self.res = pd.DataFrame(
-                columns=["num_stations", "num_tasks", "tuner", "nll"]
+                columns=["num_stations", "num_tasks", "tuner", "pretrained", "nll"]
             )
             return
 
@@ -178,20 +182,22 @@ class Evaluator(Sim2RealTrainer):
 
         return self._to_dataloader(self.test_set, self.num_samples)
 
-    def _set_era5_result(self, tspec: TuneSpec, key, val):
+    def _set_result(self, tspec: TuneSpec, key, val):
         self._set_result_inner(
             tspec.num_stations,
             tspec.num_tasks,
             str(tspec.tuner),
+            not tspec.no_pretraining,
             key,
             val,
         )
 
-    def _set_result_inner(self, num_stations, num_tasks, tuner, key, val):
+    def _set_result_inner(self, num_stations, num_tasks, tuner, pretrained, key, val):
         df = self.res
         df = df[df["num_stations"] == num_stations]
         df = df[df["num_tasks"] == num_tasks]
         df = df[df["tuner"] == tuner]
+        df = df[df["pretrained"] == pretrained]
 
         if not df.empty:
             idx = df.index[0]
@@ -204,28 +210,7 @@ class Evaluator(Sim2RealTrainer):
             "num_stations": num_stations,
             "num_tasks": num_tasks,
             "tuner": tuner,
-        }
-
-        idx = 0 if self.res.empty else self.res.index.max() + 1
-        self.res.loc[idx] = record
-
-    def _set_result(self, tspec: TuneSpec, key, val):
-        df = self.res
-        df = df[df["num_stations"] == tspec.num_stations]
-        df = df[df["num_tasks"] == tspec.num_tasks]
-        df = df[df["tuner"] == str(tspec.tuner)]
-
-        if not df.empty:
-            idx = df.index[0]
-            self.res.loc[idx, key] = val
-            return
-
-        # Otherwise, need to create new row.
-        record = {
-            key: val,
-            "num_stations": tspec.num_stations,
-            "num_tasks": tspec.num_tasks,
-            "tuner": str(tspec.tuner),
+            "pretrained": pretrained,
         }
 
         idx = 0 if self.res.empty else self.res.index.max() + 1
@@ -234,6 +219,7 @@ class Evaluator(Sim2RealTrainer):
     def _init_weights(self, tspec):
         exp_dir = exp_dir_sim2real(self.mspec, tspec)
         best_path = f"{weight_dir(exp_dir)}/best.h5"
+        print(best_path)
 
         self.model.model, _, _ = load_weights(self.model.model, best_path)
         print(f"Loaded best weights from {best_path}.")
@@ -253,22 +239,55 @@ class Evaluator(Sim2RealTrainer):
             axs[0].legend()
         return fig, axs
 
+    def predict(self, task):
+        if task is None:
+            task = self.sample_tasks[0]
+        else:
+            task = copy.deepcopy(task)
 
-def generate_tspecs(init_tspec, nums_stations, nums_tasks, tuners):
+        mean_ds, std_ds = self.model.predict(
+            task, X_t=self.raw_aux, resolution_factor=1
+        )
+
+        return mean_ds, std_ds
+
+
+def generate_tspecs(
+    init_tspec: TuneSpec,
+    nums_stations,
+    nums_tasks,
+    tuners,
+    include_real_only: bool = False,
+):
     tspecs = []
 
+    # Cover ERA5 only baseline.
     if TunerType.none in tuners:
         for num_stations in nums_stations:
             # Make a copy of the initial tspec.
             tspec = replace(init_tspec)
 
             # Modify.
+            tspec.no_pretraining = False
             tspec.num_stations = num_stations
             tspec.tuner = TunerType.none
 
             tspecs.append(tspec)
 
         tuners = [t for t in tuners if t != TunerType.none]
+
+    if include_real_only:
+        for num_stations, num_tasks in product(nums_stations, nums_tasks):
+            # Make a copy of the initial tspec.
+            tspec = replace(init_tspec)
+
+            # Modify.
+            tspec.no_pretraining = True
+            tspec.num_stations = num_stations
+            tspec.num_tasks = num_tasks
+            tspec.tuner = TunerType.naive
+
+            tspecs.append(tspec)
 
     for num_stations, num_tasks, tuner in product(nums_stations, nums_tasks, tuners):
         # Make a copy of the initial tspec.
@@ -278,25 +297,29 @@ def generate_tspecs(init_tspec, nums_stations, nums_tasks, tuners):
         tspec.num_stations = num_stations
         tspec.num_tasks = num_tasks
         tspec.tuner = tuner
+        tspec.no_pretraining = False
 
         tspecs.append(tspec)
     return tspecs
 
 
+# %%
+
 num_samples = 1024
 
 nums_stations = [500, 100, 20]  # 4, 20, 100, 500?
 nums_tasks = [400, 80, 16]  # 400, 80, 16
-tuners = [TunerType.none]
+tuners = []
 
 out.wandb = False
 e = Evaluator(paths, opt, out, data, model, tune, num_samples)
 # %%
-tspecs = generate_tspecs(tune, nums_stations, nums_tasks, tuners)
+tspecs = generate_tspecs(
+    tune, nums_stations, nums_tasks, tuners, include_real_only=True
+)
 
 det_results = []
 nll_results = []
-
 for tspec in tqdm(tspecs):
     try:
         print(f"N={tspec.num_stations}, M={tspec.num_tasks}, Tuner={tspec.tuner}")
@@ -319,7 +342,8 @@ for tspec in tqdm(tspecs):
         #    e.plot_prediction(task)
         # plt.show()
         # e.save()
-    except FileNotFoundError:
+    except FileNotFoundError as err:
+        print(f"Not found: {err}")
         continue
 e.save()
 # %%
@@ -345,3 +369,23 @@ e.res.set_index(["num_stations", "num_tasks", "tuner"])
 # ax.set_ylabel("Count")
 # ax.set_title("NLL Distribution")
 # save_plot(None, "nll_hist_tuned", fig=fig)
+
+# %%
+out.wandb = False
+e = Evaluator(paths, opt, out, data, model, tune, 5)
+# %%
+lo = 9
+hi = 48.3
+
+
+fig, axs = plt.subplots(2, 1)
+e.sample_tasks = e._init_sample_tasks()
+mean, std = e.predict(e.test_set[8])
+mean[names.temp].where((mean[names.lon] > lo) & (mean[names.lat] < hi), drop=True).plot(
+    ax=axs[0]
+)
+e.raw_aux[names.height].where(
+    (e.raw_aux[names.lon] > lo) & (e.raw_aux[names.lat] < hi), drop=True
+).plot(ax=axs[1])
+# %%
+e.plot_example_task()
