@@ -76,11 +76,20 @@ class Sim2RealTrainer(Trainer):
 
         self.wandb_name = f"{tspec.tuner} N_stat={self.tspec.num_stations} N_tasks={self.tspec.num_tasks}"
 
+        # Random initialisation.
+        if tspec.no_pretraining:
+            opt.start_from = None
+
         super().__init__(paths, opt, out, data, mspec)
+
+        if tspec.no_pretraining:
+            self.loaded_checkpoint = True
+
         self._load_initial_weights()
         self._apply_tuner()
 
-        self.plot_train_val()
+        if out.plots:
+            self.plot_train_val()
 
     def _apply_tuner(self):
         if self.tspec.tuner == TunerType.naive:
@@ -477,6 +486,6 @@ def run_experiments(nums_stations, nums_tasks, tuners):
 
 if __name__ == "__main__":
     nums_stations = [500, 100, 20]  # 4, 20, 100, 500?
-    nums_tasks = [400]  # 400, 80, 16
-    tuners = [TunerType.long_range]
+    nums_tasks = [400, 80, 16]  # 400, 80, 16
+    tuners = [TunerType.naive]
     run_experiments(nums_stations, nums_tasks, tuners)

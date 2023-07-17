@@ -126,6 +126,7 @@ class TuneSpec:
     split: bool
     frac_power: int
     frequency_level: int
+    no_pretraining: bool
 
 
 # Inferred from ERA5 data and pasted here.
@@ -260,4 +261,5 @@ tune = TuneSpec(
     # How much should sparse tasks be preferred? Larger => more sparse tasks.
     frac_power=2,
     frequency_level=4,
+    no_pretraining=True,
 )
