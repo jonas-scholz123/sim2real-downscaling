@@ -251,6 +251,26 @@ class Evaluator(Sim2RealTrainer):
 
         return mean_ds, std_ds
 
+    def alps_plot(self, task):
+        lo = 9
+        hi = 48.3
+
+        if task is None:
+            task = self.sample_tasks[0]
+        else:
+            task = copy.deepcopy(task)
+
+        fig, axs = plt.subplots(2, 1)
+        mean, std = self.predict(task)
+        mean[names.temp].where(
+            (mean[names.lon] > lo) & (mean[names.lat] < hi), drop=True
+        ).plot(ax=axs[0])
+        e.raw_aux[names.height].where(
+            (e.raw_aux[names.lon] > lo) & (e.raw_aux[names.lat] < hi), drop=True
+        ).plot(ax=axs[1])
+
+        return fig, axs
+
 
 def generate_tspecs(
     init_tspec: TuneSpec,
@@ -369,23 +389,3 @@ e.res.set_index(["num_stations", "num_tasks", "tuner"])
 # ax.set_ylabel("Count")
 # ax.set_title("NLL Distribution")
 # save_plot(None, "nll_hist_tuned", fig=fig)
-
-# %%
-out.wandb = False
-e = Evaluator(paths, opt, out, data, model, tune, 5)
-# %%
-lo = 9
-hi = 48.3
-
-
-fig, axs = plt.subplots(2, 1)
-e.sample_tasks = e._init_sample_tasks()
-mean, std = e.predict(e.test_set[8])
-mean[names.temp].where((mean[names.lon] > lo) & (mean[names.lat] < hi), drop=True).plot(
-    ax=axs[0]
-)
-e.raw_aux[names.height].where(
-    (e.raw_aux[names.lon] > lo) & (e.raw_aux[names.lat] < hi), drop=True
-).plot(ax=axs[1])
-# %%
-e.plot_example_task()
