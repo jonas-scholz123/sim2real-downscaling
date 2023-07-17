@@ -31,7 +31,10 @@ def exp_dir_sim(m: ModelSpec):
 
 def exp_dir_sim2real(m: ModelSpec, t: TuneSpec):
     model_dir = get_model_dir(m)
-    path = f"{model_dir}/sim2real_N{t.num_stations}_M{t.num_tasks}/{t.tuner}"
+
+    sim2real_str = "real" if t.no_pretraining else "sim2real"
+
+    path = f"{model_dir}/{sim2real_str}_N{t.num_stations}_M{t.num_tasks}/{t.tuner}"
     ensure_exists(path)
     return path
 
@@ -92,7 +95,7 @@ def split_df(df, dts, station_ids) -> Tuple[pd.DataFrame]:
 
     split = df.query(f"{names.station_id} in @station_ids and {names.time} in @dts")
     remainder = df.query(
-        f"{names.station_id} not in @station_ids and {names.time} not in @dts"
+        f"{names.station_id} not in @sttion_ids and {names.time} not in @dts"
     )
 
     return split, remainder
