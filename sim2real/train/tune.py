@@ -75,13 +75,10 @@ class Sim2RealTrainer(Trainer):
 
         self.wandb_name = f"{tspec.tuner} N_stat={self.tspec.num_stations} N_tasks={self.tspec.num_tasks}"
 
-        # Random initialisation.
-        if tspec.no_pretraining:
-            opt.start_from = None
-
         super().__init__(paths, opt, out, data, mspec)
 
         if tspec.no_pretraining:
+            # Random init.
             self.loaded_checkpoint = True
 
         self._load_initial_weights()
