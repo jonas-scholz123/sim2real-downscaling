@@ -92,6 +92,7 @@ class OutputSpec:
     data_crs: ccrs._CylindricalProjection
     sample_dates: list
     wandb_name: str = None
+    spatiotemp_vals: bool
 
 
 @dataclass
@@ -204,9 +205,9 @@ pretrain_opt = OptimSpec(
     batches_per_epoch=200,
     num_epochs=200,
     lr=1e-4,
-    start_from="best",  # None, "best", "latest"
-    scheduler_patience=5,
-    early_stop_patience=15,
+    start_from=None,  # None, "best", "latest"
+    scheduler_patience=8,
+    early_stop_patience=20,
     scheduler_factor=1 / 3,
 )
 
@@ -224,7 +225,7 @@ tune_opt = OptimSpec(
     scheduler_factor=1 / 3,
 )
 
-opt = tune_opt
+opt = pretrain_opt
 
 ppu = 200  # Found from dwd.compute_ppu()
 model = ModelSpec(
@@ -249,6 +250,7 @@ out = OutputSpec(
     data_crs=ccrs.PlateCarree(),
     # Must be part of test dates.
     sample_dates=["2022-03-01 08:00:00", "2022-01-02 04:00:00"],
+    spatiotemp_vals=False,
 )
 
 tune = TuneSpec(
@@ -256,10 +258,10 @@ tune = TuneSpec(
     num_stations=500,
     num_tasks=400,
     val_frac_stations=0.2,
-    val_frac_times=0.05,
+    val_frac_times=0.2,
     split=True,
     # How much should sparse tasks be preferred? Larger => more sparse tasks.
     frac_power=2,
     frequency_level=4,
-    no_pretraining=False,
+    no_pretraining=True,
 )

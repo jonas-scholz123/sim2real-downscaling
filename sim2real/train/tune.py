@@ -71,7 +71,6 @@ class Sim2RealTrainer(Trainer):
     ) -> None:
         self.dwd_raw = DWDSTationData(paths)
         self.full = self.dwd_raw.full()
-        self.val_frac = 0.2
         self.tspec = tspec
 
         self.wandb_name = f"{tspec.tuner} N_stat={self.tspec.num_stations} N_tasks={self.tspec.num_tasks}"
@@ -462,12 +461,13 @@ class Sim2RealTrainer(Trainer):
         """
         Add additional custom entries to self.metrics that get logged.
         """
-        self.metrics[names.val_spatial_loss] = self.compute_loglik(
-            self.spatial_val_loader
-        )
-        self.metrics[names.val_temporal_loss] = self.compute_loglik(
-            self.temporal_val_loader
-        )
+        if self.out.spatiotemp_vals:
+            self.metrics[names.val_spatial_loss] = self.compute_loglik(
+                self.spatial_val_loader
+            )
+            self.metrics[names.val_temporal_loss] = self.compute_loglik(
+                self.temporal_val_loader
+            )
         return
 
 
@@ -486,7 +486,7 @@ def run_experiments(nums_stations, nums_tasks, tuners):
 
 
 if __name__ == "__main__":
-    nums_stations = [100, 20]  # 4, 20, 100, 500?
-    nums_tasks = [10000, 2000]  # 400, 80, 16
+    nums_stations = [500, 100, 20]  # 4, 20, 100, 500?
+    nums_tasks = [10000]  # 400, 80, 16
     tuners = [TunerType.naive]
     run_experiments(nums_stations, nums_tasks, tuners)
