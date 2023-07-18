@@ -253,13 +253,13 @@ out = OutputSpec(
 
 tune = TuneSpec(
     tuner=TunerType.naive,
-    num_stations=50,
-    num_tasks=10000,
+    num_stations=500,
+    num_tasks=400,
     val_frac_stations=0.2,
-    val_frac_times=0.2,
+    val_frac_times=0.05,
     split=True,
     # How much should sparse tasks be preferred? Larger => more sparse tasks.
     frac_power=2,
     frequency_level=4,
-    no_pretraining=True,
+    no_pretraining=False,
 )
