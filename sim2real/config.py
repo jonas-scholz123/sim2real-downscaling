@@ -215,12 +215,12 @@ tune_opt = OptimSpec(
     device="cuda",
     batch_size=16,
     batch_size_val=512,
-    batches_per_epoch=25,
+    batches_per_epoch=100,
     num_epochs=50,
     lr=3e-5,
     start_from=None,  # None, "best", "latest"
-    scheduler_patience=3,
-    early_stop_patience=5,
+    scheduler_patience=5,
+    early_stop_patience=15,
     scheduler_factor=1 / 3,
 )
 
