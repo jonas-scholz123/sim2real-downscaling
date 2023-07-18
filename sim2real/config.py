@@ -91,8 +91,8 @@ class OutputSpec:
     fig_crs: ccrs._CylindricalProjection
     data_crs: ccrs._CylindricalProjection
     sample_dates: list
-    wandb_name: str = None
     spatiotemp_vals: bool
+    wandb_name: str = None
 
 
 @dataclass
