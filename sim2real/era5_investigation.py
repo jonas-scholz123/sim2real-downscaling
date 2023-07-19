@@ -8,13 +8,13 @@ from typing import Callable
 from datetime import datetime, timedelta
 import os
 
-from sim2real.datasets import DWDSTationData
+from sim2real.datasets import DWDStationData
 from sim2real.plots import plot_geopandas
 from sim2real.config import paths, names
 from sim2real.gridder import Gridder
 
 # %%
-dwd_sd = DWDSTationData(paths)
+dwd_sd = DWDStationData(paths)
 era5 = xr.open_dataset(paths.era5)
 # %%
 
@@ -35,7 +35,7 @@ def index(a, x):
 
 class Comparer:
     def __init__(
-        self, dwd_sd: DWDSTationData, era5: xr.Dataset, start, end, freq="1H"
+        self, dwd_sd: DWDStationData, era5: xr.Dataset, start, end, freq="1H"
     ) -> None:
         gridder = Gridder(era5[names.lat].values, era5[names.lon].values)
         dwd_sd.apply_grid(gridder)

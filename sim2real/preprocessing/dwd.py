@@ -11,7 +11,7 @@ import numpy as np
 from sim2real.config import data, paths, names
 from sim2real.plots import init_fig
 from sim2real.utils import ensure_dir_exists
-from sim2real.datasets import DWDSTationData, load_station_splits
+from sim2real.datasets import DWDStationData, load_station_splits
 
 
 fnames = [
@@ -665,7 +665,7 @@ def datetime_split_plot():
     from sim2real.plots import save_plot
     import matplotlib.pyplot as plt
 
-    full = DWDSTationData(paths).full()
+    full = DWDStationData(paths).full()
     dts = full.index.get_level_values(names.time).unique()
 
     train, val, test = train_val_test_dts(dts)
@@ -744,7 +744,7 @@ def split(df, dts, station_ids) -> Tuple[pd.DataFrame]:
 
 
 def get_test_station_ids():
-    dwd = DWDSTationData(paths)
+    dwd = DWDStationData(paths)
 
     df = pd.read_csv(f"{paths.root}/data/raw/dwd/value_stations.txt")
     df.columns = [
@@ -797,7 +797,7 @@ def get_furthest(stations, distance_matrix):
 
 
 def station_sampling_plot():
-    full = DWDSTationData(paths).full()
+    full = DWDStationData(paths).full()
     gdf = full.groupby(names.station_id).first()
 
     from sim2real.plots import init_fig, save_plot
@@ -821,7 +821,7 @@ def save_station_splits(mode="random"):
     num_val_stations = 50
     np.random.seed(42)
 
-    dwd = DWDSTationData(paths)
+    dwd = DWDStationData(paths)
     gdf = dwd.full().groupby(names.station_id).first()
     station_ids = gdf.index.get_level_values(names.station_id).sort_values()
     sdf = pd.DataFrame(index=station_ids)
@@ -872,7 +872,7 @@ def save_station_splits(mode="random"):
 
 
 def save_datetime_splits():
-    full = DWDSTationData(paths).full()
+    full = DWDStationData(paths).full()
     dts = full.index.get_level_values(names.time).unique()
     train_dts, val_dts, test_dts = train_val_test_dts(dts)
     df = pd.DataFrame(index=dts.sort_values())
@@ -887,7 +887,7 @@ def save_datetime_splits():
 
 def plot_train_val(train, val):
     fig, axs = init_fig()
-    dwd = DWDSTationData(paths)
+    dwd = DWDStationData(paths)
     dwd.plot_stations(train, "o", "C0", ax=axs[0], label="Train")
     dwd.plot_stations(val, "s", "C1", ax=axs[0], label="Val")
     axs[0].legend()
@@ -896,6 +896,6 @@ def plot_train_val(train, val):
 if __name__ == "__main__":
     download_dwd()
     process_dwd()
-    #process_value_stations()
-    #save_station_splits("random")
-    #ss = load_station_splits()
+    # process_value_stations()
+    # save_station_splits("random")
+    # ss = load_station_splits()

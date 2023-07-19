@@ -115,7 +115,7 @@ class ECADStationData:
         return entries
 
 
-class DWDSTationData:
+class DWDStationData:
     def __init__(self, paths: Paths, df=None, meta_df=None) -> None:
         if df is None or meta_df is None:
             self.df, self.meta_df = self._load_data(paths)
@@ -174,9 +174,9 @@ class DWDSTationData:
             f"{names.station_id} in @train_station_ids"
         )
 
-        train = DWDSTationData(None, train_df, train_meta_df)
-        val = DWDSTationData(None, val_df, val_meta_df)
-        test = DWDSTationData(None, test_df, test_meta_df)
+        train = DWDStationData(None, train_df, train_meta_df)
+        val = DWDStationData(None, val_df, val_meta_df)
+        test = DWDStationData(None, test_df, test_meta_df)
 
         return train, val, test
 

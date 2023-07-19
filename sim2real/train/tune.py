@@ -52,7 +52,7 @@ from sim2real.utils import (
 )
 from sim2real.plots import save_plot
 from sim2real.datasets import (
-    DWDSTationData,
+    DWDStationData,
     load_elevation,
     load_station_splits,
     load_time_splits,
@@ -69,7 +69,7 @@ class Sim2RealTrainer(Trainer):
         mspec: ModelSpec,
         tspec: TuneSpec,
     ) -> None:
-        self.dwd_raw = DWDSTationData(paths)
+        self.dwd_raw = DWDStationData(paths)
         self.full = self.dwd_raw.full()
         self.tspec = tspec
 
