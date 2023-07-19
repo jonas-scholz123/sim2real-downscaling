@@ -47,7 +47,7 @@ class Evaluator(Sim2RealTrainer):
         self.num_samples = num_samples
         self._load_results()
 
-    def evaluate_era5_baseline(self, tspec: TuneSpec):
+    def _init_weights_era5_baseline(self):
         # Load weights
         exp_dir = exp_dir_sim(self.mspec)
         best_path = f"{weight_dir(exp_dir)}/best.h5"
@@ -55,6 +55,9 @@ class Evaluator(Sim2RealTrainer):
         self.model.model, _, _ = load_weights(self.model.model, best_path)
         print(f"Loaded best ERA5 weights from {best_path}.")
         self.model.model = self.model.model.to(self.opt.device)
+
+    def evaluate_era5_baseline(self, tspec: TuneSpec):
+        self._init_weights_era5_baseline()
 
         self.test_loader = self._init_testloader(tspec)
 
@@ -251,7 +254,7 @@ class Evaluator(Sim2RealTrainer):
 
         return mean_ds, std_ds
 
-    def alps_plot(self, task):
+    def alps_plot(self, task, fig=None, axs=None):
         lo = 9
         hi = 48.3
 
@@ -260,14 +263,17 @@ class Evaluator(Sim2RealTrainer):
         else:
             task = copy.deepcopy(task)
 
-        fig, axs = plt.subplots(2, 1)
+        if fig is None:
+            fig, axs = plt.subplots(2, 1, sharex=True)
         mean, std = self.predict(task)
         mean[names.temp].where(
             (mean[names.lon] > lo) & (mean[names.lat] < hi), drop=True
-        ).plot(ax=axs[0])
+        ).plot(ax=axs[0], cmap="coolwarm")
         e.raw_aux[names.height].where(
             (e.raw_aux[names.lon] > lo) & (e.raw_aux[names.lat] < hi), drop=True
-        ).plot(ax=axs[1])
+        ).plot(ax=axs[1], cmap="viridis")
+        fig.suptitle("")
+        axs[0].set_xlabel("")
 
         return fig, axs
 
@@ -323,15 +329,14 @@ def generate_tspecs(
     return tspecs
 
 
-# %%
-
 num_samples = 1024
 
 nums_stations = [500, 100, 20]  # 4, 20, 100, 500?
 nums_tasks = [400, 80, 16]  # 400, 80, 16
 tuners = []
-
 out.wandb = False
+# %%
+
 e = Evaluator(paths, opt, out, data, model, tune, num_samples)
 # %%
 tspecs = generate_tspecs(
@@ -389,3 +394,28 @@ e.res.set_index(["num_stations", "num_tasks", "tuner"])
 # ax.set_ylabel("Count")
 # ax.set_title("NLL Distribution")
 # save_plot(None, "nll_hist_tuned", fig=fig)
+# %%
+e = Evaluator(paths, opt, out, data, model, tune, num_samples)
+# %%
+tspec = replace(tune, no_pretraining=False, num_tasks=10000, num_stations=500)
+
+fig, axs = plt.subplots(2, 2, sharex=True, sharey=True)
+e.test_loader = e._init_testloader(tspec)
+t = e.test_set[240]
+
+e._init_weights_era5_baseline()
+e.alps_plot(t, fig=fig, axs=axs[:, 0])
+
+e._init_weights(tspec)
+e.alps_plot(t, fig=fig, axs=axs[:, 1])
+
+fig.suptitle("")
+
+axs[1, 1].set_ylabel("")
+axs[0, 1].set_ylabel("")
+axs[0, 0].set_title("")
+axs[0, 1].set_title("")
+
+save_plot(None, "alps", fig)
+# %%
+axs[0, 0]
