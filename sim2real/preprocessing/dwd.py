@@ -894,6 +894,8 @@ def plot_train_val(train, val):
 
 
 if __name__ == "__main__":
+    download_dwd()
+    process_dwd()
     process_value_stations()
     save_station_splits("random")
     # datetime_split_plot()
