@@ -896,13 +896,6 @@ def plot_train_val(train, val):
 if __name__ == "__main__":
     download_dwd()
     process_dwd()
-    process_value_stations()
-    save_station_splits("random")
-    # datetime_split_plot()
-    # save_datetime_splits()
-    ss = load_station_splits()
-    lim = 500
-    train = ss[ss["SET"] == "TRAIN"].sort_values("ORDER")[0:lim].index
-    val = ss[ss["SET"] == "VAL"].sort_values("ORDER")[0 : lim // 10].index
-
-    plot_train_val(train, val)
+    #process_value_stations()
+    #save_station_splits("random")
+    #ss = load_station_splits()
