@@ -333,14 +333,14 @@ num_samples = 1024
 
 nums_stations = [500, 100, 20]  # 4, 20, 100, 500?
 nums_tasks = [10000]  # 400, 80, 16
-tuners = []
+tuners = [TunerType.naive, TunerType.film]
 out.wandb = False
 # %%
 
 e = Evaluator(paths, opt, out, data, model, tune, num_samples)
 # %%
 tspecs = generate_tspecs(
-    tune, nums_stations, nums_tasks, tuners, include_real_only=True
+    tune, nums_stations, nums_tasks, tuners, include_real_only=False
 )
 
 det_results = []
