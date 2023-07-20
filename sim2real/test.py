@@ -332,15 +332,19 @@ def generate_tspecs(
 num_samples = 1024
 
 nums_stations = [500, 100, 20]  # 4, 20, 100, 500?
-nums_tasks = [10000]  # 400, 80, 16
+nums_tasks = [16, 80, 400, 10000]  # 400, 80, 16
 tuners = [TunerType.naive, TunerType.film]
-out.wandb = False
+include_real_only = True
 # %%
 
 e = Evaluator(paths, opt, out, data, model, tune, num_samples)
 # %%
 tspecs = generate_tspecs(
-    tune, nums_stations, nums_tasks, tuners, include_real_only=False
+    tune,
+    nums_stations,
+    nums_tasks,
+    tuners,
+    include_real_only=include_real_only,
 )
 
 det_results = []
@@ -370,6 +374,7 @@ for tspec in tqdm(tspecs):
     except FileNotFoundError as err:
         print(f"Not found: {err}")
         continue
+    e.save()
 e.save()
 # %%
 e.res.set_index(["num_stations", "num_tasks", "tuner"])
