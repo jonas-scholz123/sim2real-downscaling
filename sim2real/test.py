@@ -394,28 +394,28 @@ e.res.set_index(["num_stations", "num_tasks", "tuner"])
 # ax.set_ylabel("Count")
 # ax.set_title("NLL Distribution")
 # save_plot(None, "nll_hist_tuned", fig=fig)
-# %%
-e = Evaluator(paths, opt, out, data, model, tune, num_samples)
-# %%
-tspec = replace(tune, no_pretraining=False, num_tasks=10000, num_stations=500)
-
-fig, axs = plt.subplots(2, 2, sharex=True, sharey=True)
-e.test_loader = e._init_testloader(tspec)
-t = e.test_set[240]
-
-e._init_weights_era5_baseline()
-e.alps_plot(t, fig=fig, axs=axs[:, 0])
-
-e._init_weights(tspec)
-e.alps_plot(t, fig=fig, axs=axs[:, 1])
-
-fig.suptitle("")
-
-axs[1, 1].set_ylabel("")
-axs[0, 1].set_ylabel("")
-axs[0, 0].set_title("")
-axs[0, 1].set_title("")
-
-save_plot(None, "alps", fig)
-# %%
-axs[0, 0]
+## %%
+# e = Evaluator(paths, opt, out, data, model, tune, num_samples)
+## %%
+# tspec = replace(tune, no_pretraining=False, num_tasks=10000, num_stations=500)
+#
+# fig, axs = plt.subplots(2, 2, sharex=True, sharey=True)
+# e.test_loader = e._init_testloader(tspec)
+# t = e.test_set[240]
+#
+# e._init_weights_era5_baseline()
+# e.alps_plot(t, fig=fig, axs=axs[:, 0])
+#
+# e._init_weights(tspec)
+# e.alps_plot(t, fig=fig, axs=axs[:, 1])
+#
+# fig.suptitle("")
+#
+# axs[1, 1].set_ylabel("")
+# axs[0, 1].set_ylabel("")
+# axs[0, 0].set_title("")
+# axs[0, 1].set_title("")
+#
+# save_plot(None, "alps", fig)
+## %%
+# axs[0, 0]
