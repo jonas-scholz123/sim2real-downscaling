@@ -19,6 +19,7 @@ def get_model_dir(m: ModelSpec):
     channel_str = str(m.unet_channels)[1:-1].replace(", ", "_")
     if m.film:
         channel_str += "film"
+
     return f"{paths.out}/{m.likelihood}/ppu_{m.ppu}_channels_{channel_str}_dimyt_{m.dim_yt}_dim_yc_{m.dim_yc}"
 
 

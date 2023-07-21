@@ -92,7 +92,13 @@ class SimTrainer(Trainer):
 
     def _init_tasksets(self) -> Tuple[Taskset, Taskset, Taskset]:
         context, target, c_points, t_points = self._get_data()
-        tl = TaskLoader(context, target, time_freq="H")
+        tl = TaskLoader(
+            context,
+            target,
+            # links=[(0, 0)],
+            time_freq="H",
+            discrete_xarray_sampling=not self.data.era5_interpolation,
+        )
         self.task_loader = tl
 
         def taskset(dates, freq, deterministic):
@@ -104,6 +110,8 @@ class SimTrainer(Trainer):
                 time_range=dates,
                 freq=freq,
                 deterministic=deterministic,
+                split=self.data.era5_split,
+                frac_power=self.data.frac_power,
             )
 
         train_set = taskset(self.data.train_dates, "H", False)

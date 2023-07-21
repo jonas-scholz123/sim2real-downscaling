@@ -1,4 +1,5 @@
 import pandas as pd
+from copy import deepcopy
 from torch.utils.data import Dataset
 import numpy as np
 from typing import Iterable, Tuple
@@ -39,7 +40,7 @@ class Taskset(Dataset):
             self.times = list(datetimes)
         else:
             self.times = list(pd.date_range(*time_range, freq=freq))
-        self.num_context, self.num_target = num_context, num_target
+        self.num_context, self.num_target = deepcopy(num_context), deepcopy(num_target)
         self.task_loader = taskloader
         self.deterministic = deterministic
         self.seed = opt.seed + 1

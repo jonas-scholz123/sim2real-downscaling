@@ -39,9 +39,12 @@ class DataSpec:
     val_freq: str
     era5_context: Tuple[int, int]
     era5_target: int
+    era5_interpolation: bool
+    era5_split: bool
     dwd_context: Tuple[int, int]
     dwd_target: int
     norm_params: Dict
+    frac_power: int
 
 
 @dataclass
@@ -125,7 +128,6 @@ class TuneSpec:
     val_frac_stations: float
     val_frac_times: float
     split: bool
-    frac_power: int
     frequency_level: int
     no_pretraining: bool
 
@@ -192,9 +194,13 @@ data = DataSpec(
     val_freq="39H",
     era5_context=(0, 500),
     era5_target="all",
+    era5_interpolation=False,
+    # This doesn't work until later.
+    era5_split=False,
     dwd_context=(0.0, 1.0),
     dwd_target="all",
     norm_params=norm_params,
+    frac_power=2,
 )
 
 pretrain_opt = OptimSpec(
@@ -205,7 +211,7 @@ pretrain_opt = OptimSpec(
     batches_per_epoch=200,
     num_epochs=200,
     lr=1e-4,
-    start_from=None,  # None, "best", "latest"
+    start_from="best",  # None, "best", "latest"
     scheduler_patience=8,
     early_stop_patience=20,
     scheduler_factor=1 / 3,
@@ -245,7 +251,7 @@ model = ModelSpec(
 out = OutputSpec(
     wandb=True,
     plots=True,
-    wandb_name=None,
+    wandb_name="tune back to no linear interpolation",
     fig_crs=ccrs.TransverseMercator(central_longitude=10, approx=False),
     data_crs=ccrs.PlateCarree(),
     # Must be part of test dates.
@@ -261,7 +267,6 @@ tune = TuneSpec(
     val_frac_times=0.2,
     split=True,
     # How much should sparse tasks be preferred? Larger => more sparse tasks.
-    frac_power=2,
     frequency_level=4,
     no_pretraining=True,
 )

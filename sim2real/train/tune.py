@@ -141,7 +141,6 @@ class Sim2RealTrainer(Trainer):
         set_task_loader: bool = False,
         deterministic: bool = False,
         split: bool = False,
-        frac_power: int = 1,
     ):
         c_df, _ = split_df(self.full, times, c_stations)
         t_df, _ = split_df(self.full, times, t_stations)
@@ -193,7 +192,7 @@ class Sim2RealTrainer(Trainer):
             datetimes=dts,
             deterministic=deterministic,
             split=split,
-            frac_power=frac_power,
+            frac_power=self.data.frac_power,
         )
 
     def _init_tasksets(self) -> Tuple[Taskset, Taskset, Taskset]:
@@ -234,7 +233,6 @@ class Sim2RealTrainer(Trainer):
             set_task_loader=False,
             deterministic=False,
             split=True,
-            frac_power=self.tspec.frac_power,
         )
 
         val = self.gen_trainset(
@@ -258,7 +256,6 @@ class Sim2RealTrainer(Trainer):
             self.val_dates,
             deterministic=True,
             split=True,
-            frac_power=1,
         )
 
         spatial_val_dates = sample_dates(time_split, names.train, m_val)
