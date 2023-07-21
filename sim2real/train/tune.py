@@ -462,6 +462,7 @@ class Sim2RealTrainer(Trainer):
             self.metrics[names.val_temporal_loss] = self.compute_loglik(
                 self.temporal_val_loader
             )
+            self.metrics[names.val_spatial_loss] = self.compute_loglik(self.test_loader)
         return
 
 

@@ -226,12 +226,12 @@ tune_opt = OptimSpec(
     num_epochs=100,
     lr=3e-5,
     start_from=None,  # None, "best", "latest"
-    scheduler_patience=3,
-    early_stop_patience=5,
+    scheduler_patience=10,
+    early_stop_patience=20,
     scheduler_factor=1 / 3,
 )
 
-opt = pretrain_opt
+opt = tune_opt
 
 ppu = 200  # Found from dwd.compute_ppu()
 model = ModelSpec(
@@ -251,7 +251,7 @@ model = ModelSpec(
 out = OutputSpec(
     wandb=True,
     plots=True,
-    wandb_name="tune back to no linear interpolation",
+    wandb_name=None,
     fig_crs=ccrs.TransverseMercator(central_longitude=10, approx=False),
     data_crs=ccrs.PlateCarree(),
     # Must be part of test dates.
@@ -268,5 +268,5 @@ tune = TuneSpec(
     split=True,
     # How much should sparse tasks be preferred? Larger => more sparse tasks.
     frequency_level=4,
-    no_pretraining=True,
+    no_pretraining=False,
 )
