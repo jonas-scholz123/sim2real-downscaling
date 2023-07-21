@@ -333,7 +333,8 @@ num_samples = 1024
 
 nums_stations = [500, 100, 20]  # 4, 20, 100, 500?
 nums_tasks = [16, 80, 400, 10000]  # 400, 80, 16
-tuners = [TunerType.naive, TunerType.film]
+# tuners = [TunerType.naive, TunerType.film, TunerType.none]
+tuners = [TunerType.none]
 include_real_only = True
 # %%
 
