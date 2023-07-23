@@ -35,7 +35,12 @@ def exp_dir_sim2real(m: ModelSpec, t: TuneSpec):
 
     sim2real_str = "real" if t.no_pretraining else "sim2real"
 
-    path = f"{model_dir}/{sim2real_str}_N{t.num_stations}_M{t.num_tasks}/{t.tuner}"
+    if t.era5_frac != 0.0:
+        frac_str = f"_r{t.era5_frac}"
+    else:
+        frac_str = ""
+
+    path = f"{model_dir}/{sim2real_str}_N{t.num_stations}_M{t.num_tasks}{frac_str}/{t.tuner}"
     ensure_exists(path)
     return path
 
