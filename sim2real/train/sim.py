@@ -117,7 +117,6 @@ class SimTrainer(Trainer):
         train_set = taskset(self.data.train_dates, "H", False)
         val_set = taskset(self.data.cv_dates, self.data.val_freq, True)
         test_set = taskset(self.data.test_dates, self.data.val_freq, True)
-
         return train_set, val_set, test_set
 
     def _add_var(

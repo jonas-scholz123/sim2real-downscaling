@@ -1,3 +1,4 @@
+# %%
 import pandas as pd
 from copy import deepcopy
 from torch.utils.data import Dataset
@@ -7,6 +8,8 @@ import deepsensor.torch
 from deepsensor.data.loader import TaskLoader
 
 from sim2real.config import OptimSpec
+
+# %%
 
 
 class Taskset(Dataset):
@@ -94,3 +97,35 @@ class Taskset(Dataset):
         )
 
         return task
+
+
+class MultiTaskset(Dataset):
+    def __init__(self, tasksets) -> None:
+        self.tasksets = tasksets
+
+    def __len__(self):
+        return sum([len(ts) for ts in self.tasksets])
+
+    def __getitem__(self, index):
+        for ts in self.tasksets:
+            if index >= len(ts):
+                index -= len(ts)
+            else:
+                return ts[index]
+
+
+class NonDetMultiTaskset(Dataset):
+    def __init__(self, tasksets, probabilities, size=10000) -> None:
+        self.tasksets = tasksets
+        self.indices = range(len(self.tasksets))
+        self.probabilities = probabilities
+        self.size = size
+
+    def __len__(self):
+        return self.size
+
+    def __getitem__(self, _):
+        idx = np.random.choice(self.indices, p=self.probabilities)
+        ds = self.tasksets[idx]
+        idx = np.random.randint(0, len(ds))
+        return ds[idx]

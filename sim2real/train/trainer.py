@@ -168,9 +168,11 @@ class Trainer(ABC):
 
         return float(mean_batch_loss.detach().cpu().numpy())
 
-    def compute_loglik(self, loader):
+    def compute_loglik(self, loader, max_num_batches=100):
         batch_losses = []
         for i, task in tqdm(enumerate(loader)):
+            if i == max_num_batches:
+                break
             batch_loss = self.eval_on_batch(task)
             batch_losses.append(batch_loss)
         return np.mean(batch_losses)
@@ -215,13 +217,13 @@ class Trainer(ABC):
         self.pbar = tqdm(range(self.start_epoch, self.opt.num_epochs + 1))
 
         if self.start_epoch == 1:
-            # Before training, get initial eval and plots.
-            val_loss = self.compute_loglik(self.cv_loader)
-            self.metrics[names.val_loss] = val_loss
-            self.metrics[names.train_loss] = val_loss
-            self.metrics[names.epoch] = 0
-            self._log()
-            self.plot_sample_tasks(0)
+           # Before training, get initial eval and plots.
+           val_loss = self.compute_loglik(self.cv_loader)
+           self.metrics[names.val_loss] = val_loss
+           self.metrics[names.train_loss] = val_loss
+           self.metrics[names.epoch] = 0
+           self._log()
+           self.plot_sample_tasks(0)
 
         for epoch in self.pbar:
             batch_losses = []

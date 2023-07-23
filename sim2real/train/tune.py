@@ -1,6 +1,6 @@
 # %%
 import copy
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from itertools import product
 from typing import Dict, Tuple, Union
 import xarray as xr
@@ -38,7 +38,8 @@ from sim2real.config import (
     tune,
 )
 from sim2real.plots import init_fig
-from sim2real.train.taskset import Taskset
+from sim2real.train.sim import SimTrainer
+from sim2real.train.taskset import NonDetMultiTaskset, Taskset
 from sim2real.train.trainer import Trainer
 from sim2real.train.tuners import film_tuner, long_range_tuner, naive_tuner
 from sim2real.utils import (
@@ -224,8 +225,7 @@ class Sim2RealTrainer(Trainer):
         # 1000 -> all stations labelled "TEST".
         test_stations = sample_stations(stat_split, names.test, 1000)
 
-        # TODO: Think abt set_task_loader
-        train = self.gen_trainset(
+        trainset_dwd = self.gen_trainset(
             train_stations,
             self.data.dwd_context,
             train_stations,
@@ -235,6 +235,26 @@ class Sim2RealTrainer(Trainer):
             deterministic=False,
             split=True,
         )
+
+        out = replace(self.out, wandb=False)
+        e5_trainer = SimTrainer(
+            self.paths,
+            self.opt,
+            out,
+            self.data,
+            self.mspec,
+        )
+        # Load ERA5 trainer to mix in some ERA5 samples. This isn't clean but has to do for now.
+        trainset_e5 = e5_trainer.train_set
+
+        if self.tspec.era5_frac == 0.0:
+            train = trainset_dwd
+        else:
+            # Mix in some ERA5.
+            train = NonDetMultiTaskset(
+                [trainset_dwd, trainset_e5],
+                [1 - self.tspec.era5_frac, self.tspec.era5_frac],
+            )
 
         val = self.gen_trainset(
             train_stations,
@@ -281,6 +301,28 @@ class Sim2RealTrainer(Trainer):
             split=False,
         )
 
+        sparse_test = self.gen_trainset(
+            train_stations + val_stations,
+            (0, 20),
+            test_stations,
+            "all",
+            self.test_dates,
+            set_task_loader=False,
+            deterministic=True,
+            split=False,
+        )
+
+        dense_test = self.gen_trainset(
+            train_stations + val_stations,
+            (400, 500),
+            test_stations,
+            "all",
+            self.test_dates,
+            set_task_loader=False,
+            deterministic=True,
+            split=False,
+        )
+
         self.train_stations = train_stations
         self.val_stations = val_stations
         self.test_stations = test_stations
@@ -291,6 +333,9 @@ class Sim2RealTrainer(Trainer):
         self.spatial_val_loader = self._to_dataloader(
             spatial_val, self.opt.batch_size_val
         )
+        self.era5_loader = self._to_dataloader(trainset_e5, self.opt.batch_size_val)
+        self.sparse_loader = self._to_dataloader(sparse_test, self.opt.batch_size_val)
+        self.dense_loader = self._to_dataloader(dense_test, self.opt.batch_size_val)
 
         return train, val, test
 
@@ -470,13 +515,15 @@ class Sim2RealTrainer(Trainer):
         Add additional custom entries to self.metrics that get logged.
         """
         if self.out.spatiotemp_vals:
-            self.metrics[names.val_spatial_loss] = self.compute_loglik(
-                self.spatial_val_loader
-            )
-            self.metrics[names.val_temporal_loss] = self.compute_loglik(
-                self.temporal_val_loader
-            )
-            self.metrics[names.val_spatial_loss] = self.compute_loglik(self.test_loader)
+            # self.metrics[names.val_spatial_loss] = self.compute_loglik(
+            #    self.spatial_val_loader
+            # )
+            # self.metrics[names.val_temporal_loss] = self.compute_loglik(
+            #    self.temporal_val_loader
+            # )
+            self.metrics["test_loss"] = self.compute_loglik(self.test_loader, 1)
+            self.metrics["test_sparse"] = self.compute_loglik(self.sparse_loader, 1)
+            self.metrics["test_dense"] = self.compute_loglik(self.dense_loader, 1)
         return
 
 
