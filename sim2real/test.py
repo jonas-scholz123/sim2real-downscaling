@@ -80,7 +80,7 @@ class Evaluator(Sim2RealTrainer):
 
         return df, nlls
 
-    def evaluate_model(self, tspec: TuneSpec, num_folds=1, radius=0.01):
+    def evaluate_model(self, tspec: TuneSpec):
         # Load the right weights.
         self._init_weights(tspec)
 
@@ -88,11 +88,11 @@ class Evaluator(Sim2RealTrainer):
         # test_loader = self._init_testloader(tspec)
         self.test_loader = self._init_testloader(tspec)
 
-        nlls = self.evaluate_loglik(self.test_set, num_folds, radius)
+        nlls = self.evaluate_loglik(self.test_set)
         self._set_result(tspec, "nll", np.mean(nlls))
         self._set_result(tspec, "nll_std", np.std(nlls) / np.sqrt(len(nlls)))
 
-        df = self.deterministic_results(self.test_set, num_folds, radius)
+        df = self.deterministic_results(self.test_set)
         sqrt_N = np.sqrt(df.shape[0])
         mae = (df["T2M_pred"] - df["T2M_truth"]).abs().mean()
         self._set_result(tspec, "mae", mae)
@@ -104,35 +104,27 @@ class Evaluator(Sim2RealTrainer):
     # def evaluate_loglik(self, test_loader):
     #    return self.compute_loglik(test_loader)
 
-    def evaluate_loglik(self, test_set, num_folds=1, radius=0.01):
+    def evaluate_loglik(self, test_set):
         with torch.no_grad():
             task_losses = []
             for task in tqdm(iter(test_set)):
                 task_losses.append(
-                    float(
-                        self.model.loss_fn(
-                            task, normalise=True, num_folds=num_folds, radius=radius
-                        )
-                        .detach()
-                        .cpu()
-                    )
+                    float(self.model.loss_fn(task, normalise=True).detach().cpu())
                 )
 
         return task_losses
 
-    def deterministic_results(self, task_set, num_folds=1, radius=0.01):
+    def deterministic_results(self, task_set):
         dfs = []
         for t in tqdm(iter(task_set)):
-            df = self.deterministic_results_task(t, num_folds, radius)
+            df = self.deterministic_results_task(t)
             dfs.append(df)
         return pd.concat(dfs)
 
-    def deterministic_results_task(self, task, num_folds=1, radius=0.01):
+    def deterministic_results_task(self, task):
         # Get temperature at all target stations on the task date.
         truth = self.get_truth(task["time"], station_ids=self.test_stations)
-        mean_ds, _ = self.model.predict(
-            task, X_t=truth, num_folds=num_folds, radius=radius
-        )
+        mean_ds, _ = self.model.predict(task, X_t=truth)
         truth.index = mean_ds.index
         return truth.join(mean_ds, lsuffix="_truth", rsuffix="_pred")
 
@@ -354,14 +346,14 @@ include_real_only = True
 e = Evaluator(paths, opt, out, data, model, tune, num_samples, False)
 # %%
 t = replace(tune, num_tasks=400, num_stations=100)
-e.evaluate_model(t, num_folds=3, radius=0.015)
+e.evaluate_model(t)
 # e._init_weights(t)
 # e.test_loader = e._init_testloader(t)
 # %%
 e.res
 # %%
 task = e.test_set[120]
-e.plot_prediction(task, radius=0.015, num_folds=3, res_factor=1)
+e.plot_prediction(task)
 # %%
 tspecs = generate_tspecs(
     tune,

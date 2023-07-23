@@ -359,9 +359,7 @@ class Sim2RealTrainer(Trainer):
     def _plot_X_t(self):
         return self.raw_aux
 
-    def plot_prediction(
-        self, task=None, name=None, num_folds=1, radius=0.001, res_factor=1
-    ):
+    def plot_prediction(self, task=None, name=None, res_factor=1):
         def lons_and_lats(df):
             lats = df.index.get_level_values(names.lat)
             lons = df.index.get_level_values(names.lon)
@@ -375,22 +373,14 @@ class Sim2RealTrainer(Trainer):
         # Get temperature at all stations on the task date.
         truth = self.get_truth(task["time"])
 
-        mean_ds, std_ds = self.model.predict(
-            task, X_t=truth, num_folds=1, radius=radius
-        )
+        mean_ds, std_ds = self.model.predict(task, X_t=truth)
         # Fix rounding errors along dimensions.
         err_da = mean_ds[names.temp] - truth[names.temp]
         err_da = err_da.dropna()
 
         high_res_df = self._add_aux(res_factor=res_factor)[0].to_dataframe()
         # Higher resolution prediction everywhere.
-        mean_ds, std_ds = self.model.predict(
-            task,
-            X_t=high_res_df,
-            resolution_factor=1,
-            num_folds=num_folds,
-            radius=radius,
-        )
+        mean_ds, std_ds = self.model.predict(task, X_t=high_res_df, resolution_factor=1)
         mean_ds = mean_ds.to_xarray().astype(float)
         std_ds = std_ds.to_xarray().astype(float)
 
