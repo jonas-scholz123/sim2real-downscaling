@@ -332,12 +332,14 @@ class Trainer(ABC):
                 numpy_state=numpy_state,
             )
 
-    def _add_aux(self) -> Tuple[Union[xr.DataArray, pd.Series], Union[float, int, str]]:
+    def _add_aux(
+        self, res_factor=1.0
+    ) -> Tuple[Union[xr.DataArray, pd.Series], Union[float, int, str]]:
         def _coarsen(high_res):
             """
             Coarsen factor for shrinking something high-res to PPU resolution.
             """
-            factor = len(high_res) // self.mspec.ppu
+            factor = len(high_res) // (res_factor * self.mspec.ppu)
             return int(factor)
 
         aux = load_elevation()

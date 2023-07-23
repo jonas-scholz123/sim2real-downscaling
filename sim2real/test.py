@@ -41,11 +41,11 @@ from sim2real.utils import (
 
 
 class Evaluator(Sim2RealTrainer):
-    def __init__(self, paths, opt, out, data, mspec, tspec, num_samples):
+    def __init__(self, paths, opt, out, data, mspec, tspec, num_samples, load=True):
         super().__init__(paths, opt, out, data, mspec, tspec)
         self.results_path = paths.test_results
         self.num_samples = num_samples
-        self._load_results()
+        self._load_results(load)
 
     def _init_weights_era5_baseline(self):
         # Load weights
@@ -80,7 +80,7 @@ class Evaluator(Sim2RealTrainer):
 
         return df, nlls
 
-    def evaluate_model(self, tspec: TuneSpec):
+    def evaluate_model(self, tspec: TuneSpec, num_folds=1, radius=0.01):
         # Load the right weights.
         self._init_weights(tspec)
 
@@ -88,11 +88,11 @@ class Evaluator(Sim2RealTrainer):
         # test_loader = self._init_testloader(tspec)
         self.test_loader = self._init_testloader(tspec)
 
-        nlls = self.evaluate_loglik(self.test_set)
+        nlls = self.evaluate_loglik(self.test_set, num_folds, radius)
         self._set_result(tspec, "nll", np.mean(nlls))
         self._set_result(tspec, "nll_std", np.std(nlls) / np.sqrt(len(nlls)))
 
-        df = self.deterministic_results(self.test_set)
+        df = self.deterministic_results(self.test_set, num_folds, radius)
         sqrt_N = np.sqrt(df.shape[0])
         mae = (df["T2M_pred"] - df["T2M_truth"]).abs().mean()
         self._set_result(tspec, "mae", mae)
@@ -104,31 +104,44 @@ class Evaluator(Sim2RealTrainer):
     # def evaluate_loglik(self, test_loader):
     #    return self.compute_loglik(test_loader)
 
-    def evaluate_loglik(self, test_set):
+    def evaluate_loglik(self, test_set, num_folds=1, radius=0.01):
         with torch.no_grad():
             task_losses = []
-            for task in iter(test_set):
+            for task in tqdm(iter(test_set)):
                 task_losses.append(
-                    float(self.model.loss_fn(task, normalise=True).detach().cpu())
+                    float(
+                        self.model.loss_fn(
+                            task, normalise=True, num_folds=num_folds, radius=radius
+                        )
+                        .detach()
+                        .cpu()
+                    )
                 )
 
         return task_losses
 
-    def deterministic_results(self, task_set):
+    def deterministic_results(self, task_set, num_folds=1, radius=0.01):
         dfs = []
-        for t in iter(task_set):
-            df = self.deterministic_results_task(t)
+        for t in tqdm(iter(task_set)):
+            df = self.deterministic_results_task(t, num_folds, radius)
             dfs.append(df)
         return pd.concat(dfs)
 
-    def deterministic_results_task(self, task):
+    def deterministic_results_task(self, task, num_folds=1, radius=0.01):
         # Get temperature at all target stations on the task date.
         truth = self.get_truth(task["time"], station_ids=self.test_stations)
-        mean_ds, _ = self.model.predict(task, X_t=truth)
+        mean_ds, _ = self.model.predict(
+            task, X_t=truth, num_folds=num_folds, radius=radius
+        )
         truth.index = mean_ds.index
         return truth.join(mean_ds, lsuffix="_truth", rsuffix="_pred")
 
-    def _load_results(self):
+    def _load_results(self, load=True):
+        if not load:
+            self.res = pd.DataFrame(
+                columns=["num_stations", "num_tasks", "tuner", "pretrained", "nll"]
+            )
+            return
         try:
             self.res = pd.read_csv(self.results_path)
             print(f"Loaded previous results from {self.results_path}")
@@ -171,6 +184,7 @@ class Evaluator(Sim2RealTrainer):
         self.train_stations = train_stations
         self.val_stations = val_stations
         self.test_stations = test_stations
+        print(len(train_stations), len(val_stations))
 
         self.test_set = self.gen_trainset(
             train_stations + val_stations,
@@ -329,7 +343,7 @@ def generate_tspecs(
     return tspecs
 
 
-num_samples = 1024
+num_samples = 128
 
 nums_stations = [500, 100, 20]  # 4, 20, 100, 500?
 nums_tasks = [16, 80, 400, 10000]  # 400, 80, 16
@@ -337,8 +351,17 @@ nums_tasks = [16, 80, 400, 10000]  # 400, 80, 16
 tuners = [TunerType.none]
 include_real_only = True
 # %%
-
-e = Evaluator(paths, opt, out, data, model, tune, num_samples)
+e = Evaluator(paths, opt, out, data, model, tune, num_samples, False)
+# %%
+t = replace(tune, num_tasks=400, num_stations=100)
+e.evaluate_model(t, num_folds=3, radius=0.015)
+# e._init_weights(t)
+# e.test_loader = e._init_testloader(t)
+# %%
+e.res
+# %%
+task = e.test_set[120]
+e.plot_prediction(task, radius=0.015, num_folds=3, res_factor=1)
 # %%
 tspecs = generate_tspecs(
     tune,
@@ -425,3 +448,4 @@ e.res.set_index(["num_stations", "num_tasks", "tuner"])
 # save_plot(None, "alps", fig)
 ## %%
 # axs[0, 0]
+# %%
