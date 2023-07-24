@@ -232,7 +232,7 @@ tune_opt = OptimSpec(
     lr=3e-5,
     start_from=None,  # None, "best", "latest"
     scheduler_patience=10,
-    early_stop_patience=20,
+    early_stop_patience=30,
     scheduler_factor=1 / 3,
 )
 
@@ -264,7 +264,7 @@ out = OutputSpec(
     spatiotemp_vals=False,
     test_metrics=True,
     era5_metric=True,
-    num_batches_test=1,
+    num_batches_test=2,
 )
 
 tune = TuneSpec(
