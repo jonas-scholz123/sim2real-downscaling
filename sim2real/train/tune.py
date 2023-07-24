@@ -523,11 +523,14 @@ class Sim2RealTrainer(Trainer):
 
 
 # TODO: Should use generate_tspecs.
-def run_experiments(nums_stations, nums_tasks, tuners):
+def run_experiments(nums_stations, nums_tasks, tuners, era5_fracs):
     tspec = tune
-    for num_stations, num_tasks, tuner in product(nums_stations, nums_tasks, tuners):
+    for num_stations, num_tasks, tuner, era5_frac in product(
+        nums_stations, nums_tasks, tuners, era5_fracs
+    ):
         # TODO: Need to modify LR?
 
+        tspec.era5_frac = era5_frac
         tspec.num_stations = num_stations
         tspec.num_tasks = num_tasks
         tspec.tuner = tuner
@@ -537,10 +540,11 @@ def run_experiments(nums_stations, nums_tasks, tuners):
 
 
 if __name__ == "__main__":
-    nums_stations = [500, 100, 20]  # 4, 20, 100, 500?
+    nums_stations = [20]  # 4, 20, 100, 500?
     nums_tasks = [10000]  # 400, 80, 16
     tuners = [TunerType.naive]
-    run_experiments(nums_stations, nums_tasks, tuners)
+    era5_fracs = [0.0, 0.05, 0.1, 0.2, 0.4, 0.8]
+    run_experiments(nums_stations, nums_tasks, tuners, era5_fracs)
     # s2r = Sim2RealTrainer(paths, opt, out, data, model, tune)
     # s2r.compute_loglik(s2r.era5_loader, 1)
 
