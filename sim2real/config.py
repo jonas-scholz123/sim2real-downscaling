@@ -270,5 +270,5 @@ tune = TuneSpec(
     split=True,
     frequency_level=4,
     no_pretraining=False,
-    era5_frac=0.0,
+    era5_frac=0.5,
 )
