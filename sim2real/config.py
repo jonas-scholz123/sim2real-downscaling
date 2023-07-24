@@ -196,7 +196,7 @@ data = DataSpec(
     # This should be set in a way that ensures all times
     # of day are covered.
     val_freq="39H",
-    era5_context=(0, 500),
+    era5_context=(1, 500),
     era5_target="all",
     era5_interpolation=True,
     # This doesn't work until later.
