@@ -333,7 +333,8 @@ class Sim2RealTrainer(Trainer):
         self.spatial_val_loader = self._to_dataloader(
             spatial_val, self.opt.batch_size_val
         )
-        self.era5_loader = self._to_dataloader(trainset_e5, self.opt.batch_size_val)
+        # self.era5_loader = self._to_dataloader(trainset_e5, self.opt.batch_size_val)
+        self.era5_loader = e5_trainer.cv_loader
         self.sparse_loader = self._to_dataloader(sparse_test, self.opt.batch_size_val)
         self.dense_loader = self._to_dataloader(dense_test, self.opt.batch_size_val)
 
@@ -540,3 +541,7 @@ if __name__ == "__main__":
     nums_tasks = [10000]  # 400, 80, 16
     tuners = [TunerType.naive]
     run_experiments(nums_stations, nums_tasks, tuners)
+    # s2r = Sim2RealTrainer(paths, opt, out, data, model, tune)
+    # s2r.compute_loglik(s2r.era5_loader, 1)
+
+# %%
