@@ -96,6 +96,8 @@ class OutputSpec:
     sample_dates: list
     spatiotemp_vals: bool
     test_metrics: bool
+    era5_metric: bool
+    num_batches_test: int
     wandb_name: str = None
 
 
@@ -196,7 +198,7 @@ data = DataSpec(
     val_freq="39H",
     era5_context=(0, 500),
     era5_target="all",
-    era5_interpolation=False,
+    era5_interpolation=True,
     # This doesn't work until later.
     era5_split=False,
     dwd_context=(0.0, 1.0),
@@ -261,6 +263,8 @@ out = OutputSpec(
     sample_dates=["2022-03-01 08:00:00", "2022-01-02 04:00:00"],
     spatiotemp_vals=False,
     test_metrics=True,
+    era5_metric=True,
+    num_batches_test=1,
 )
 
 tune = TuneSpec(

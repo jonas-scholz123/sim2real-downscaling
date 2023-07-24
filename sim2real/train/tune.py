@@ -512,9 +512,12 @@ class Sim2RealTrainer(Trainer):
                 self.temporal_val_loader
             )
         if self.out.test_metrics:
-            self.metrics["test_loss"] = self.compute_loglik(self.test_loader, 1)
-            self.metrics["test_sparse"] = self.compute_loglik(self.sparse_loader, 1)
-            self.metrics["test_dense"] = self.compute_loglik(self.dense_loader, 1)
+            n = self.out.num_batches_test
+            self.metrics["test_loss"] = self.compute_loglik(self.test_loader, n)
+            self.metrics["test_sparse"] = self.compute_loglik(self.sparse_loader, n)
+            self.metrics["test_dense"] = self.compute_loglik(self.dense_loader, n)
+        if self.out.era5_metric:
+            self.metrics["era5_loss"] = self.compute_loglik(self.era5_loader, n)
         return
 
 
