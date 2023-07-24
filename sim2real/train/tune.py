@@ -505,12 +505,13 @@ class Sim2RealTrainer(Trainer):
         Add additional custom entries to self.metrics that get logged.
         """
         if self.out.spatiotemp_vals:
-            # self.metrics[names.val_spatial_loss] = self.compute_loglik(
-            #    self.spatial_val_loader
-            # )
-            # self.metrics[names.val_temporal_loss] = self.compute_loglik(
-            #    self.temporal_val_loader
-            # )
+            self.metrics[names.val_spatial_loss] = self.compute_loglik(
+                self.spatial_val_loader
+            )
+            self.metrics[names.val_temporal_loss] = self.compute_loglik(
+                self.temporal_val_loader
+            )
+        if self.out.test_metrics:
             self.metrics["test_loss"] = self.compute_loglik(self.test_loader, 1)
             self.metrics["test_sparse"] = self.compute_loglik(self.sparse_loader, 1)
             self.metrics["test_dense"] = self.compute_loglik(self.dense_loader, 1)

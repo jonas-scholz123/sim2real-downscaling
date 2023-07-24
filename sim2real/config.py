@@ -95,6 +95,7 @@ class OutputSpec:
     data_crs: ccrs._CylindricalProjection
     sample_dates: list
     spatiotemp_vals: bool
+    test_metrics: bool
     wandb_name: str = None
 
 
@@ -259,6 +260,7 @@ out = OutputSpec(
     # Must be part of test dates.
     sample_dates=["2022-03-01 08:00:00", "2022-01-02 04:00:00"],
     spatiotemp_vals=False,
+    test_metrics=True,
 )
 
 tune = TuneSpec(
