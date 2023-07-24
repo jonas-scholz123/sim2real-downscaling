@@ -198,7 +198,7 @@ data = DataSpec(
     val_freq="39H",
     era5_context=(1, 500),
     era5_target="all",
-    era5_interpolation=True,
+    era5_interpolation=False,
     # This doesn't work until later.
     era5_split=False,
     dwd_context=(0.0, 1.0),
@@ -210,7 +210,7 @@ data = DataSpec(
 
 pretrain_opt = OptimSpec(
     seed=42,
-    device="cpu",
+    device="cuda",
     batch_size=16,
     batch_size_val=512,
     batches_per_epoch=200,
@@ -224,7 +224,7 @@ pretrain_opt = OptimSpec(
 
 tune_opt = OptimSpec(
     seed=42,
-    device="cpu",
+    device="cuda",
     batch_size=16,
     batch_size_val=512,
     batches_per_epoch=25,
@@ -254,7 +254,7 @@ model = ModelSpec(
 )
 
 out = OutputSpec(
-    wandb=False,
+    wandb=True,
     plots=True,
     wandb_name=None,
     fig_crs=ccrs.TransverseMercator(central_longitude=10, approx=False),
@@ -276,5 +276,5 @@ tune = TuneSpec(
     split=True,
     frequency_level=4,
     no_pretraining=False,
-    era5_frac=0.5,
+    era5_frac=0.05,
 )
