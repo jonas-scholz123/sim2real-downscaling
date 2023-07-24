@@ -426,7 +426,7 @@ class Sim2RealTrainer(Trainer):
         axs[1].set_title("ConvNP mean")
 
         im = std_ds[names.temp].plot(
-            cmap="Greys",
+            cmap="viridis_r",
             ax=axs[2],
             transform=transform,
             extend="both",

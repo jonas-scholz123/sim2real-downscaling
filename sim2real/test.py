@@ -176,7 +176,10 @@ class Evaluator(Sim2RealTrainer):
         self.train_stations = train_stations
         self.val_stations = val_stations
         self.test_stations = test_stations
-        print(len(train_stations), len(val_stations))
+
+        print("test checksum: ", sum(test_stations))
+        print("val checksum: ", sum(val_stations))
+        print("train checksum: ", sum(train_stations))
 
         self.test_set = self.gen_trainset(
             train_stations + val_stations,
@@ -187,6 +190,15 @@ class Evaluator(Sim2RealTrainer):
             set_task_loader=True,
             deterministic=True,
             split=False,
+        )
+
+        self.val_set = self.gen_trainset(
+            train_stations,
+            "all",
+            val_stations,
+            "all",
+            self.test_dates,
+            deterministic=True,
         )
 
         return self._to_dataloader(self.test_set, self.num_samples)
@@ -225,10 +237,9 @@ class Evaluator(Sim2RealTrainer):
         idx = 0 if self.res.empty else self.res.index.max() + 1
         self.res.loc[idx] = record
 
-    def _init_weights(self, tspec):
+    def _init_weights(self, tspec, which="best"):
         exp_dir = exp_dir_sim2real(self.mspec, tspec)
-        best_path = f"{weight_dir(exp_dir)}/best.h5"
-        print(best_path)
+        best_path = f"{weight_dir(exp_dir)}/{which}.h5"
 
         self.model.model, _, _ = load_weights(self.model.model, best_path)
         print(f"Loaded best weights from {best_path}.")
@@ -345,9 +356,17 @@ include_real_only = True
 # %%
 e = Evaluator(paths, opt, out, data, model, tune, num_samples, False)
 # %%
-t = replace(tune, num_tasks=400, num_stations=100)
-e.evaluate_model(t)
-# e._init_weights(t)
+era5_frac = 0.00
+print(f"ERA5 Frac = {era5_frac}")
+t = replace(tune, num_tasks=10000, num_stations=500, era5_frac=era5_frac)
+e._init_weights(t, which="latest")
+e._init_testloader(t)
+idx = -10
+print("Val:")
+e.plot_prediction(e.val_set[idx])
+print("Test:")
+e.plot_prediction(e.test_set[idx])
+# e.evaluate_model(t)
 # e.test_loader = e._init_testloader(t)
 # %%
 e.res
