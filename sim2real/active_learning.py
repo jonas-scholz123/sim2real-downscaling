@@ -28,12 +28,10 @@ from deepsensor.active_learning.acquisition_fns import Stddev, MeanStddev
 
 
 def ger_mask(ds):
-    country = gpd.read_file("../data/shapefiles/DEU_adm0.shp")
-
     lats = ds["LAT"].values
     lons = ds["LON"].values
 
-    country = gpd.read_file("../data/shapefiles/DEU_adm0.shp")
+    country = gpd.read_file(paths.shapefile)
     geom = country.geometry[0]
 
     y, x = np.meshgrid(lats, lons)
