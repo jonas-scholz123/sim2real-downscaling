@@ -10,6 +10,11 @@ import cartopy.crs as ccrs
 import cartopy.feature as feature
 from sim2real.config import paths, names, data
 
+import matplotlib
+
+matplotlib.rcParams["mathtext.fontset"] = "stix"
+matplotlib.rcParams["font.family"] = "STIXGeneral"
+
 
 def save_plot(exp_path, name, fig=None):
     if exp_path is None:
@@ -71,3 +76,12 @@ def init_fig(nrows=1, ncols=1, figsize=(4, 4), ret_transform=False):
     if ret_transform:
         return fig, axs, ccrs.PlateCarree()
     return fig, axs
+
+
+def adjust_plot(fig=None, axs=None):
+    if fig is None:
+        fig = plt.gcf()
+    if axs is None:
+        axs = [plt.gca()]
+    for ax in axs:
+        ax.spines[["right", "top"]].set_visible(False)
