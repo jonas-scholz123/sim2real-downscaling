@@ -78,7 +78,7 @@ def active_learning_run(e, num_stations, tuned):
     e.test_loader = e._init_testloader(t)
 
     X_t = e.raw_aux
-    X_s = e.raw_aux.coarsen({"LAT": 15, "LON": 15}, boundary="trim").mean()
+    X_s = e.raw_aux.coarsen({"LAT": 5, "LON": 5}, boundary="trim").mean()
 
     greedy_alg = GreedyAlgorithm(
         model=e.model,
@@ -89,7 +89,7 @@ def active_learning_run(e, num_stations, tuned):
         N_new_context=5,
     )
 
-    test_tasks = [e.test_set[i] for i in range(1)]
+    test_tasks = [e.test_set[i] for i in range(10)]
 
     # acquisition_fn = Stddev(e.model)
     acquisition_fn = MeanStddev(e.model)
