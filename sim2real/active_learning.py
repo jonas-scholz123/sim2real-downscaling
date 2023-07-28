@@ -80,7 +80,7 @@ def active_learning_run(e, num_stations, tuned):
     e.test_loader = e._init_testloader(t)
 
     X_t = e.raw_aux
-    X_s = e.raw_aux.coarsen({"LAT": 50, "LON": 50}, boundary="trim").mean()
+    X_s = e.raw_aux.coarsen({"LAT": 15, "LON": 15}, boundary="trim").mean()
 
     greedy_alg = GreedyAlgorithm(
         model=e.model,
