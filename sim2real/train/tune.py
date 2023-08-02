@@ -216,7 +216,11 @@ class Sim2RealTrainer(Trainer):
         m_train = m_all - m_val
 
         self.train_dates = sample_dates(time_split, names.train, m_train)
-        self.val_dates = sample_dates(time_split, names.val, m_val)
+
+        # Max 512 dates = 1 batch, variance low enough.
+        self.val_dates = sample_dates(
+            time_split, names.val, min(m_val, self.opt.batch_size_val)
+        )
         self.test_dates = time_split[time_split[names.set] == names.test].index
 
         train_stations = sample_stations(stat_split, names.train, n_train)
@@ -360,7 +364,7 @@ class Sim2RealTrainer(Trainer):
     def _plot_X_t(self):
         return self.raw_aux
 
-    def plot_prediction(self, task=None, name=None, res_factor=1):
+    def plot_prediction(self, task=None, name=None, res_factor=1, cmap="jet"):
         def lons_and_lats(df):
             lats = df.index.get_level_values(names.lat)
             lons = df.index.get_level_values(names.lon)
@@ -401,9 +405,7 @@ class Sim2RealTrainer(Trainer):
 
         s = 3**2
 
-        cmap = "seismic"
-
-        axs[0].set_title("Truth")
+        axs[0].set_title("Truth [°C]")
         im = axs[0].scatter(
             *lons_and_lats(truth),
             s=s,
@@ -423,7 +425,7 @@ class Sim2RealTrainer(Trainer):
             vmax=vmax,
             extend="both",
         )
-        axs[1].set_title("ConvNP mean")
+        axs[1].set_title("Pred. Mean [°C]")
 
         im = std_ds[names.temp].plot(
             cmap="viridis_r",
@@ -431,16 +433,16 @@ class Sim2RealTrainer(Trainer):
             transform=transform,
             extend="both",
         )
-        axs[2].set_title("ConvNP std dev")
+        axs[2].set_title("Pred Std. Dev. [°C]")
 
-        axs[3].set_title("ConvNP error")
+        axs[3].set_title("Prediction Error [°C]")
 
         biggest_err = err_da.abs().max()
         im = axs[3].scatter(
             *lons_and_lats(err_da),
             s=s,
             c=err_da,
-            cmap=cmap,
+            cmap="seismic",
             vmin=-biggest_err,
             vmax=biggest_err,
             transform=transform,
@@ -462,6 +464,8 @@ class Sim2RealTrainer(Trainer):
 
         bounds = [*self.data.bounds.lon, *self.data.bounds.lat]
         for ax in axs:
+            # Remove annoying label.
+            ax.collections[0].colorbar.ax.set_ylabel("")
             ax.set_extent(bounds, crs=transform)
             ax.add_feature(feature.BORDERS, linewidth=0.25)
             ax.coastlines(linewidth=0.25)
@@ -525,6 +529,9 @@ class Sim2RealTrainer(Trainer):
 # TODO: Should use generate_tspecs.
 def run_experiments(nums_stations, nums_tasks, tuners, era5_fracs):
     tspec = tune
+
+    lr = opt.lr
+
     for num_stations, num_tasks, tuner, era5_frac in product(
         nums_stations, nums_tasks, tuners, era5_fracs
     ):
@@ -535,15 +542,20 @@ def run_experiments(nums_stations, nums_tasks, tuners, era5_fracs):
         tspec.num_tasks = num_tasks
         tspec.tuner = tuner
 
-        s2r = Sim2RealTrainer(paths, opt, out, data, model, tspec)
+        if tuner == TunerType.film:
+            lr *= 10
+
+        adjusted_opt = replace(opt, lr=lr)
+
+        s2r = Sim2RealTrainer(paths, adjusted_opt, out, data, model, tspec)
         s2r.train()
 
 
 if __name__ == "__main__":
-    nums_stations = [20]  # 4, 20, 100, 500?
-    nums_tasks = [10000]  # 400, 80, 16
+    nums_stations = [20, 100, 500]  # 4, 20, 100, 500?
+    nums_tasks = [16, 80, 400, 2000, 10000]  # 400, 80, 16
     tuners = [TunerType.naive]
-    era5_fracs = [0.0, 0.05, 0.1, 0.2, 0.4, 0.8]
+    era5_fracs = [0.0]  # , 0.05, 0.1, 0.2, 0.4, 0.8]
     run_experiments(nums_stations, nums_tasks, tuners, era5_fracs)
     # s2r = Sim2RealTrainer(paths, opt, out, data, model, tune)
     # s2r.compute_loglik(s2r.era5_loader, 1)

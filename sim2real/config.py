@@ -186,7 +186,7 @@ paths = Paths(
     time_split=f"{root}/data/processed/splits/times.feather",
     out=f"{root}/_outputs",
     test_results=f"{root}/_outputs/test_results.csv",
-    active_learning_dir=f"{root}/_outputs/active_learning/",
+    active_learning_dir=f"{root}/_outputs/from_hpc/_outputs/active_learning/",
     shapefile=f"{root}/data/shapefiles/DEU_adm0.shp",
 )
 
@@ -234,7 +234,7 @@ tune_opt = OptimSpec(
     batches_per_epoch=25,
     num_epochs=100,
     lr=3e-5,
-    start_from=None,  # None, "best", "latest"
+    start_from="best",  # None, "best", "latest"
     scheduler_patience=10,
     early_stop_patience=30,
     scheduler_factor=1 / 3,
@@ -266,8 +266,8 @@ out = OutputSpec(
     # Must be part of test dates.
     sample_dates=["2022-03-01 08:00:00", "2022-01-02 04:00:00"],
     spatiotemp_vals=False,
-    test_metrics=True,
-    era5_metric=True,
+    test_metrics=False,
+    era5_metric=False,
     num_batches_test=2,
 )
 
