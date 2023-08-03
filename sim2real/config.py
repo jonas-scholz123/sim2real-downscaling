@@ -242,9 +242,9 @@ tune_opt = OptimSpec(
 
 opt = tune_opt
 
-ppu = 150  # Found from dwd.compute_ppu()
+ppu = 200  # Found from dwd.compute_ppu()
 model = ModelSpec(
-    unet_channels=(96,) * 4,
+    unet_channels=(96,) * 6,
     dim_yt=1,
     dim_yc=(1, 1),
     ppu=ppu,
@@ -279,6 +279,6 @@ tune = TuneSpec(
     val_frac_times=0.2,
     split=True,
     frequency_level=4,
-    no_pretraining=True,
+    no_pretraining=False,
     era5_frac=0.00,
 )

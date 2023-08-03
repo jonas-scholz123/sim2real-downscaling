@@ -163,22 +163,22 @@ class Sim2RealTrainer(Trainer):
         c_df, t_df, aux = self.data_processor([c_df, t_df, aux])
 
         # Add spatio-temporal data.
-        # x1x2_ds = construct_x1x2_ds(aux)
-        # aux["x1_arr"] = x1x2_ds["x1_arr"]
-        # aux["x2_arr"] = x1x2_ds["x2_arr"]
+        x1x2_ds = construct_x1x2_ds(aux)
+        aux["x1_arr"] = x1x2_ds["x1_arr"]
+        aux["x2_arr"] = x1x2_ds["x2_arr"]
 
         # NOTE: Can't just use times variable because the index name is still un-processed.
         dts = c_df.index.get_level_values("time").unique()
 
         # Day of year.
-        # doy_ds = construct_circ_time_ds(dts, freq="D")
-        # aux["cos_D"] = doy_ds["cos_D"]
-        # aux["sin_D"] = doy_ds["sin_D"]
+        doy_ds = construct_circ_time_ds(dts, freq="D")
+        aux["cos_D"] = doy_ds["cos_D"]
+        aux["sin_D"] = doy_ds["sin_D"]
 
         # Time of day.
-        # tod_ds = construct_circ_time_ds(dts, freq="H")
-        # aux["cos_H"] = tod_ds["cos_H"]
-        # aux["sin_H"] = tod_ds["sin_H"]
+        tod_ds = construct_circ_time_ds(dts, freq="H")
+        aux["cos_H"] = tod_ds["cos_H"]
+        aux["sin_H"] = tod_ds["sin_H"]
 
         tl = TaskLoader([c_df, aux], t_df, links=[(0, 0)], time_freq="H")
 
