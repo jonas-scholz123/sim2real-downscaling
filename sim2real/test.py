@@ -165,7 +165,7 @@ class Evaluator(Sim2RealTrainer):
         print(f"Loaded best ERA5 weights from {best_path}.")
         self.model.model = self.model.model.to(self.opt.device)
 
-    def evaluate_era5_baseline(self, tspec: TuneSpec, added_var=0.0):
+    def evaluate_era5_baseline(self, tspec: TuneSpec, added_var=0.15):
         self._init_weights_era5_baseline()
 
         self.test_loader = self._init_testloader(tspec)
@@ -393,40 +393,17 @@ class Evaluator(Sim2RealTrainer):
             axs[0].legend()
         return fig, axs
 
-    def predict(self, task):
+    def predict(self, task, resolution_factor=1):
         if task is None:
             task = self.sample_tasks[0]
         else:
             task = copy.deepcopy(task)
 
         mean_ds, std_ds = self.model.predict(
-            task, X_t=self.raw_aux, resolution_factor=1
+            task, X_t=self.raw_aux, resolution_factor=resolution_factor
         )
 
         return mean_ds, std_ds
-
-    def alps_plot(self, task, fig=None, axs=None):
-        lo = 9
-        hi = 48.3
-
-        if task is None:
-            task = self.sample_tasks[0]
-        else:
-            task = copy.deepcopy(task)
-
-        if fig is None:
-            fig, axs = plt.subplots(2, 1, sharex=True)
-        mean, std = self.predict(task)
-        mean[names.temp].where(
-            (mean[names.lon] > lo) & (mean[names.lat] < hi), drop=True
-        ).plot(ax=axs[0], cmap="coolwarm")
-        e.raw_aux[names.height].where(
-            (e.raw_aux[names.lon] > lo) & (e.raw_aux[names.lat] < hi), drop=True
-        ).plot(ax=axs[1], cmap="viridis")
-        fig.suptitle("")
-        axs[0].set_xlabel("")
-
-        return fig, axs
 
     def var_offset_grid_search(self, t, ns):
         self._init_weights_era5_baseline()
@@ -493,16 +470,57 @@ def generate_tspecs(
         tspecs.append(tspec)
     return tspecs
 
+
 if __name__ == "__main__":
     num_samples = 32
 
     nums_stations = [500, 100, 20]  # 4, 20, 100, 500?
-    nums_tasks = [16, 80, 400, 10000]  # 400, 80, 16
-    # tuners = [TunerType.naive, TunerType.film, TunerType.none]
-    tuners = [TunerType.none]
+    nums_tasks = [16, 80, 400, 2000, 10000]  # 400, 80, 16
+    tuners = [TunerType.naive, TunerType.film, TunerType.none]
+    # tuners = [TunerType.none]
     include_real_only = True
-    # %%
     e = Evaluator(paths, opt, out, data, model, tune, num_samples, False)
+
+    # %%
+
+    tspecs = generate_tspecs(
+        tune,
+        nums_stations,
+        nums_tasks,
+        tuners,
+        include_real_only=include_real_only,
+    )
+
+    det_results = []
+    nll_results = []
+    for tspec in tqdm(tspecs):
+        try:
+            print(f"N={tspec.num_stations}, M={tspec.num_tasks}, Tuner={tspec.tuner}")
+            if tspec.tuner == TunerType.none:
+                det_result, nlls = e.evaluate_era5_baseline(tspec)
+                det_results.append(det_result)
+                nll_results.append(nlls)
+                continue
+
+            det_result, nlls = e.evaluate_model(tspec)
+            det_results.append(det_result)
+            nll_results.append(nlls)
+
+            # e.plot_locations(
+            #    [e.train_stations, e.val_stations, e.test_stations],
+            #    labels=["Train", "Val", "Test"],
+            # )
+            # plt.show()
+            # for task in iter(e.test_set):
+            #    e.plot_prediction(task)
+            # plt.show()
+            # e.save()
+        except FileNotFoundError as err:
+            print(f"Not found: {err}")
+            continue
+        e.save()
+    e.save()
+    # %%
 
     ns = np.array([0.05, 0.1, 0.15, 0.2, 0.25])
 
@@ -568,51 +586,10 @@ if __name__ == "__main__":
     task = e.test_set[120]
     e.plot_prediction(task)
     # %%
-    tspecs = generate_tspecs(
-        tune,
-        nums_stations,
-        nums_tasks,
-        tuners,
-        include_real_only=include_real_only,
-    )
-
-    det_results = []
-    nll_results = []
-    for tspec in tqdm(tspecs):
-        try:
-            print(f"N={tspec.num_stations}, M={tspec.num_tasks}, Tuner={tspec.tuner}")
-            if tspec.tuner == TunerType.none:
-                det_result, nlls = e.evaluate_era5_baseline(tspec)
-                det_results.append(det_result)
-                nll_results.append(nlls)
-                continue
-
-            det_result, nlls = e.evaluate_model(tspec)
-            det_results.append(det_result)
-            nll_results.append(nlls)
-
-            # e.plot_locations(
-            #    [e.train_stations, e.val_stations, e.test_stations],
-            #    labels=["Train", "Val", "Test"],
-            # )
-            # plt.show()
-            # for task in iter(e.test_set):
-            #    e.plot_prediction(task)
-            # plt.show()
-            # e.save()
-        except FileNotFoundError as err:
-            print(f"Not found: {err}")
-            continue
-        e.save()
-    e.save()
     # %%
     e.res.set_index(["num_stations", "num_tasks", "tuner"])
     ## %%
 
-    t = replace(tune, num_tasks=10000, num_stations=500, era5_frac=0.0)
-
-    e._init_weights_era5_baseline()
-    e._init_testloader(t)
     # e._init_weights(t, which="best")
     # %%
     import lab as B
@@ -645,34 +622,715 @@ if __name__ == "__main__":
     ## %%
     # tspec = replace(tune, no_pretraining=False, num_tasks=10000, num_stations=500)
     #
-    # fig, axs = plt.subplots(2, 2, sharex=True, sharey=True)
-    # e.test_loader = e._init_testloader(tspec)
-    # t = e.test_set[240]
-    #
-    # e._init_weights_era5_baseline()
-    # e.alps_plot(t, fig=fig, axs=axs[:, 0])
-    #
-    # e._init_weights(tspec)
-    # e.alps_plot(t, fig=fig, axs=axs[:, 1])
-    #
-    # fig.suptitle("")
-    #
-    # axs[1, 1].set_ylabel("")
-    # axs[0, 1].set_ylabel("")
-    # axs[0, 0].set_title("")
-    # axs[0, 1].set_title("")
-    #
-    # save_plot(None, "alps", fig)
     ## %%
     # axs[0, 0]
-    # %%
+
+# %%
 
 
-    # fig, axs, crs = init_fig(ret_transform=True)
-    #
-    # placement_plot(test_tasks[0], X_new_df, e.data_processor, crs, figsize=8, ax=axs[0])
-    # plt.show()
-    ## %%
-    # deepsensor.plot.acquisition_fn(
-    #    test_tasks[0], acquisition_fn_ds, X_new_df, e.data_processor, crs, cmap=cmap
-    # )
+def lons_and_lats(df):
+    lats = df.index.get_level_values(names.lat)
+    lons = df.index.get_level_values(names.lon)
+    return lons, lats
+
+
+t = replace(tune, num_tasks=10000, num_stations=500, era5_frac=0.0)
+# e._init_weights_era5_baseline()
+e._init_weights(t)
+e._init_testloader(t)
+task = e.test_set[0]
+
+# %%
+# %%
+e.context_target_plot()
+
+# %%
+
+df = pd.DataFrame()
+df["x1"] = [0, 1 / 200]
+df["x2"] = [0, 1 / 200]
+df = df.set_index(["x1", "x2"])
+df = e.data_processor.map(df, unnorm=True)
+lats = df.index.get_level_values("LAT")
+lons = df.index.get_level_values("LON")
+lat_lengthscale = lats[1] - lats[0]
+lon_lengthscale = lons[1] - lons[0]
+# %%
+from scipy.spatial.distance import cdist
+
+
+def task_smallest_sep(task):
+    ys = task["X_c"][0][0, :]
+    xs = task["X_c"][0][1, :]
+
+    if len(ys) == 0 or len(xs) == 0:
+        raise ValueError
+
+    coordinates = list(zip(xs, ys))
+    dm = cdist(coordinates, coordinates, metric="euclid")
+    dm[dm == 0.0] += 100
+    return dm.min()
+
+
+smallest_separations = []
+for i in range(100):
+    try:
+        smallest_separations.append(task_smallest_sep(e.train_set[i]))
+    except:
+        continue
+
+smallest_separations = sorted(smallest_separations)
+# smallest_separation = smallest_separations[int(len(smallest_separations) / 5)]
+smallest_separation = smallest_separations[0]
+
+
+# %%
+def artefact_plot(
+    e,
+    task,
+    lat,
+    lon,
+    margin,
+    ax=None,
+    smallest_separation=None,
+    plot_context=True,
+    cbar=False,
+    vmin=None,
+    vmax=None,
+):
+    if ax is None:
+        fig, ax = plt.subplots(1, 1)
+
+    da = e._add_aux(10)[0]
+
+    sel = (
+        (da["LAT"] < lat + margin)
+        & (da["LAT"] > lat - margin)
+        & (da["LON"] < lon + margin)
+        & (da["LON"] > lon - margin)
+    )
+
+    da = da.where(sel, drop=True)
+
+    ys = task["X_c"][0][0, :]
+    xs = task["X_c"][0][1, :]
+    mean_ds, std_ds = e.model.predict(
+        task, X_t=da, resolution_factor=1, unnormalise=False
+    )
+
+    # Unnormalise.
+    m, s = e.data_processor.norm_params["T2M"].values()
+    mean_ds["T2M"] = (mean_ds["T2M"] * s) + m
+
+    im = mean_ds["T2M"].plot(
+        ax=ax, cmap="coolwarm", add_colorbar=cbar, vmin=vmin, vmax=vmin
+    )
+
+    x1s = mean_ds.x1
+    ax.set_yticks(np.arange(x1s.min(), x1s.max(), 1 / 200))
+    ax.set_yticklabels([])
+
+    x2s = mean_ds.x2
+    ax.set_xticks(
+        np.arange(x2s.min(), x2s.max(), 1 / 200),
+    )
+    ax.set_xticklabels([])
+
+    ax.grid(linewidth=0.05, color="black")
+    ax.set_xlabel("")
+    ax.set_ylabel("")
+    ax.set_title("")
+
+    ax.tick_params("both", bottom=False, left=False)
+
+    ax.set_aspect("equal")
+
+    if plot_context:
+        ax.scatter(
+            xs,
+            ys,
+            color="none",
+            edgecolor="k",
+            linewidth=0.5,
+            s=3**2 / margin,
+            label="Context",
+        )
+
+    if smallest_separation is not None:
+        circs = [
+            plt.Circle(
+                (x, y),
+                smallest_separation,
+                color="k",
+                fill=False,
+                linestyle="--",
+                label="Shortest Signal" if i == 0 else None,
+            )
+            for i, (x, y) in enumerate(zip(xs, ys))
+        ]
+
+        for circ in circs:
+            ax.add_patch(circ)
+
+    return da, im
+
+
+# %%
+num_times = 5
+fig, axs = plt.subplots(2, num_times, figsize=(2.2 * num_times, 5))
+seed = 44
+np.random.seed(seed)
+times = np.random.choice(e.test_set.times, num_times)
+
+dense = (50.7, 10.2)
+for i, time in enumerate(times):
+    sparse_task = e.test_set.task_loader(
+        time, context_sampling=[60, "all"], seed_override=seed
+    )
+    dense_task = e.test_set.task_loader(
+        time, context_sampling=["all", "all"], seed_override=seed
+    )
+
+    sparse = (53.35, 10.4)
+    _, im = artefact_plot(
+        e,
+        sparse_task,
+        dense[0],
+        dense[1],
+        1.5,
+        smallest_separation=None,
+        plot_context=True,
+        ax=axs[0, i],
+    )
+
+    vmin = im.norm._vmin
+    vmax = im.norm._vmax
+
+    if True:
+        aux = sparse_task["Y_c"][1]
+        aux[0] *= 0
+        aux[0] += 0.0
+        aux[1] *= 0
+        aux[1] += 0.4
+        aux[2] *= 0
+        aux[2] += 0.4
+
+    _, im = artefact_plot(
+        e,
+        sparse_task,
+        dense[0],
+        dense[1],
+        1.5,
+        smallest_separation=None,
+        plot_context=True,
+        ax=axs[1, i],
+    )
+    axs[0, i].set_title(time)
+axs[0, 0].set_ylabel("Aux Data visible", fontsize=16)
+axs[1, 0].set_ylabel("Aux Data hidden", fontsize=16)
+plt.subplots_adjust(hspace=0.05, wspace=0.1)
+save_plot(None, "artefacts_hide_aux", ext="png", dpi=200)
+# %%
+e._init_weights_era5_baseline()
+e.plot_prediction(e.train_set[20], cmap="jet")
+save_plot(None, "sample_prediction", ext="png", dpi=300)
+
+# %%
+# %%
+truth = e.get_truth(sparse_task["time"])["T2M"]
+truth = e.data_processor.map(truth)
+
+m, s = e.data_processor.norm_params["T2M"].values()
+truth = (truth * s) + m
+# %%
+
+fig, ax = plt.subplots(1, 1)
+
+_, im = artefact_plot(
+    e,
+    sparse_task,
+    sparse[0],
+    sparse[1],
+    1.0,
+    smallest_separation=smallest_separation,
+    plot_context=True,
+    ax=ax,
+)
+
+
+vmin = im.norm._vmin
+vmax = im.norm._vmax
+
+ax.set_aspect("equal")
+ax.scatter(
+    truth.index.get_level_values("x2"),
+    truth.index.get_level_values("x1"),
+    s=1.5**2,
+    c=truth[names.temp],
+    cmap="coolwarm",
+    vmin=vmin,
+    vmax=vmax,
+)
+# %%
+from pprint import pprint
+
+# %%
+elev = artefact_plot(
+    e,
+    sparse_task,
+    dense[0],
+    dense[1],
+    1.5,
+    smallest_separation=None,
+    plot_context=True,
+    ax=axs[0, i],
+)
+# mean_ds, std_ds = e.model.predict(sparse_task, X_t=truth, unnormalise=True)
+# %%
+margins = [1.2, 0.7]
+
+time = e.test_set[0]["time"]
+
+sparse_task = e.test_set.task_loader(
+    time, context_sampling=[60, "all"], seed_override=seed
+)
+
+dense_task = e.test_set.task_loader(
+    time, context_sampling=["all", "all"], seed_override=seed
+)
+# %%
+
+fig, axs = plt.subplots(
+    2,
+    2 * len(margins) + 1,
+    figsize=(12, 7),
+    gridspec_kw={"width_ratios": [1, 1, 0.2, 1, 1]},
+)
+
+
+axs[0, 2].remove()
+axs[1, 2].remove()
+
+# Dense:
+dense = (50.7, 10.2)
+# Sparse:
+sparse = (53.35, 10.4)
+
+if True:
+    for task, start_i in zip([dense_task, sparse_task], [0, 3]):
+        for i, margin in enumerate(margins, start_i):
+            for j, (lat, lon) in enumerate([dense, sparse]):
+                if margin == margins[-1]:
+                    sep = smallest_separation
+                else:
+                    sep = None
+
+                elev = artefact_plot(
+                    e,
+                    task,
+                    lat,
+                    lon,
+                    margin,
+                    smallest_separation=sep,
+                    ax=axs[j, i],
+                    plot_context=True,
+                )
+
+axs[0, 1].legend(
+    loc="center",
+    bbox_to_anchor=[0.5, 0.5],
+    bbox_transform=fig.transFigure,
+    ncol=2,
+)
+axs[0, 0].set_ylabel("Dense-Station Region", fontsize=16)
+axs[1, 0].set_ylabel("Sparse-Station Region", fontsize=16)
+
+axs[0, 0].set_title("Dense Context Points")
+axs[0, 1].set_title("Zoomed In")
+
+
+axs[0, 3].set_title("Sparse Context Points")
+axs[0, 4].set_title("Zoomed In")
+
+plt.subplots_adjust(hspace=0.2, wspace=0.05)
+save_plot(None, "artefacts", ext="png", dpi=350)
+# %%
+# %%
+
+for i in range(10, 20):
+    print(i)
+    e.plot_prediction(e.train_set[i])
+
+# %%
+axs[0, 0].get_xlim()
+# %%
+
+mean_ds, std_ds = e.model.predict(
+    task, X_t=e.raw_aux, resolution_factor=1, unnormalise=True
+)
+# %%
+fig, ax = plt.subplots(1, 1)
+mean_ds["T2M"].plot(ax=ax)
+# %%
+
+e = Evaluator(paths, opt, out, data, model, tune, num_samples)
+
+
+# %%
+def alps_plot(self, task, fig=None, axs=None):
+    lo = 9
+    hi = 48.3
+
+    if task is None:
+        task = self.sample_tasks[0]
+    else:
+        task = copy.deepcopy(task)
+
+    if fig is None:
+        fig, axs = plt.subplots(2, 1, sharex=True)
+    mean, std = self.predict(task)
+    mean[names.temp].where(
+        (mean[names.lon] > lo) & (mean[names.lat] < hi), drop=True
+    ).plot(ax=axs[0], cmap="coolwarm")
+
+    fig.suptitle("")
+    axs[0].set_xlabel("")
+    return fig, axs
+
+
+fig, axs = plt.subplots(2, 2, sharex=True, sharey=True)
+
+e._init_weights_era5_baseline()
+e.alps_plot(t, fig=fig, axs=axs[:, 0])
+
+e._init_weights(tspec)
+e.alps_plot(t, fig=fig, axs=axs[:, 1])
+
+fig.suptitle("")
+
+axs[1, 1].set_ylabel("")
+axs[0, 1].set_ylabel("")
+axs[0, 0].set_title("")
+axs[0, 1].set_title("")
+
+# save_plot(None, "alps", fig)
+# %%
+
+
+# %%
+def alps_plot():
+    lo = 9
+    hi = 48.3
+
+    tspec = replace(
+        tune,
+        no_pretraining=False,
+        num_tasks=10000,
+        num_stations=20,
+    )
+
+    e.test_loader = e._init_testloader(tspec)
+    t = e.test_set[3]
+    fig, axs = plt.subplots(
+        5,
+        2,
+        sharex=True,
+        gridspec_kw={"height_ratios": [1.5, 0.8, 1, 1, 1]},
+        figsize=(6, 4),
+    )
+
+    vmin = 2
+    vmax = 13
+
+    cmap = "plasma"
+    # Add elevation data
+
+    axs[1, 0].remove()
+    axs[1, 1].remove()
+
+    elev = e.raw_aux[names.height].where(
+        (e.raw_aux[names.lon] > lo) & (e.raw_aux[names.lat] < hi), drop=True
+    )
+
+    im = axs[0, 0].imshow(elev)
+    formatter = lambda x, _: f"{x:g}m"
+    cbar = fig.colorbar(im, ax=axs[0, 0], orientation="horizontal", format=formatter)
+    cbar.ax.set_xticks([500, 1500, 2500])
+
+    e._init_weights_era5_baseline()
+    mean, std = e.predict(t)
+    temp = (
+        mean[names.temp]
+        .where((mean[names.lon] > lo) & (mean[names.lat] < hi), drop=True)
+        .sel({names.time: t["time"]})
+    )
+    im = axs[0, 1].imshow(temp, cmap=cmap, vmin=vmin, vmax=vmax)
+
+    formatter = lambda x, _: f"{x:g}°C"
+    cbar = fig.colorbar(im, ax=axs[0, 1], orientation="horizontal", format=formatter)
+
+    for ax in axs[0, :]:
+        ax.set_xticks([])
+        ax.set_yticks([])
+
+    nums_tasks = [400, 10000]
+    nums_stations = [20, 100, 500]
+
+    for i, num_tasks in enumerate(nums_tasks, 0):
+        for j, num_stations in enumerate(nums_stations, 2):
+            tspec = replace(
+                tune,
+                no_pretraining=False,
+                num_tasks=num_tasks,
+                num_stations=num_stations,
+            )
+            e._init_weights(tspec, "best")
+            mean, std = e.predict(t)
+            temp = (
+                mean[names.temp]
+                .where((mean[names.lon] > lo) & (mean[names.lat] < hi), drop=True)
+                .sel({names.time: t["time"]})
+            )
+
+            ax = axs[j, i]
+            axs[j, 0].set_ylabel(f"$N_{{s}}= {num_stations}$", fontsize=10)
+            ax.set_xticks([])
+            ax.set_yticks([])
+            im = ax.imshow(temp, cmap=cmap, vmin=vmin, vmax=vmax)
+
+    for ax, num_times in zip(axs[2, :], nums_tasks):
+        ax.set_title(f"$N_{{times}} = {num_times}$")
+
+    axs[0, 0].set_title("Elevation")
+    axs[0, 1].set_title("Sim Only")
+
+    plt.subplots_adjust(hspace=0.05, wspace=0.05)
+    save_plot(None, "alps_plot")
+
+
+alps_plot()
+
+
+# %%
+
+
+def results_plot():
+    e._load_results()
+    df = e.res
+    nums_stations = [20, 100, 500]
+    nums_tasks = [16, 80, 400, 10000]
+    ylabels = ["Negative Log-Likelihood $\mathcal{L}$", "Mean Absolute Error"]
+
+    fig, axss = plt.subplots(2, len(nums_stations), figsize=(6, 5))
+    for j, (quantity, ylabel) in enumerate(zip(["nll", "mae"], ylabels)):
+        axs = axss[j]
+        for i, num_stations in enumerate(nums_stations):
+            df = e.res[
+                (e.res["num_stations"] == num_stations) & (e.res["pretrained"] == True)
+            ]
+
+            xs = np.array(range(len(nums_tasks)))
+            xs_film = xs + 0.1
+
+            film_ys = df[
+                df["num_tasks"].isin(nums_tasks) & (df["tuner"] == str(TunerType.film))
+            ].sort_values("num_tasks")[quantity]
+
+            naive_ys = df[
+                df["num_tasks"].isin(nums_tasks) & (df["tuner"] == str(TunerType.naive))
+            ].sort_values("num_tasks")[quantity]
+
+            sim_only = float(
+                e.res[
+                    (e.res["num_stations"] == num_stations)
+                    & (e.res["tuner"] == str(TunerType.none))
+                ][quantity]
+            )
+            axs[i].axhline(sim_only, label="Sim Only", linestyle="--", color="r")
+            axs[i].plot(xs, naive_ys, "x", label="Naive")
+            axs[i].plot(xs_film, film_ys, "x", label="FiLM")
+            axs[i].set_title(f"$N_{{stations}} = {num_stations}$")
+            axs[i].set_xticks(range(len(nums_tasks)))
+            axs[i].set_xticklabels(nums_tasks)
+            axs[i].legend()
+            axs[i].set_xlim(-0.5, len(nums_tasks) - 0.5)
+            axss[1, i].set_xlabel("$N_{times}$")
+        axs[0].set_ylabel(ylabel)
+    plt.tight_layout()
+
+
+# %%
+e._load_results()
+
+nums_stations = [20, 100, 500]
+nums_tasks = [16, 80, 400, 10000]
+
+fig, axs = plt.subplots(1, len(nums_stations), figsize=(6, 3))
+for i, num_stations in enumerate(nums_stations):
+    df = e.res[e.res["tuner"] == str(TunerType.naive)]
+    df = df[df["num_stations"] == num_stations]
+
+    xs = np.array(range(len(nums_tasks)))
+    xs_film = xs + 0.1
+
+    real_only = df[
+        df["num_tasks"].isin(nums_tasks) & (df["pretrained"] == False)
+    ].sort_values("num_tasks")["nll"]
+
+    sim2real = df[
+        df["num_tasks"].isin(nums_tasks) & (df["pretrained"] == True)
+    ].sort_values("num_tasks")["nll"]
+
+    axs[i].plot(xs, sim2real, "x", label="Sim2Real")
+    axs[i].plot(xs_film, real_only, "x", label="Real Only")
+    axs[i].set_title(f"$N_{{stations}} = {num_stations}$")
+    axs[i].set_xticks(range(len(nums_tasks)))
+    axs[i].set_xticklabels(nums_tasks)
+    axs[i].set_xlim(-0.5, len(nums_tasks) - 0.5)
+    axs[i].set_xlabel("$N_{times}$")
+    axs[0].set_ylabel("Negative Log-Likelihood $\mathcal{L}$")
+    axs[i].legend()
+plt.tight_layout()
+# %%
+
+
+def superresolution_plot():
+    # nums_stations = [20, 100, 500]
+    nums_stations = [20, 100, 500]
+    from deepsensor.plot import offgrid_context
+
+    # High res features.
+
+    # fig, axs = plt.subplots(2, len(nums_stations) + 1)
+    fig, axs, transform = init_fig(
+        2, len(nums_stations) + 1, (1.7 * (len(nums_stations) + 1), 5), True
+    )
+    axs = axs.reshape(2, len(nums_stations) + 1)
+
+    mean_cmap = "coolwarm"
+    std_cmap = "viridis_r"
+    pad = 0.05
+
+    # 1, 3, 4
+
+    tspec = replace(
+        tune,
+        no_pretraining=False,
+        num_tasks=10000,
+        num_stations=20,
+    )
+    e.test_loader = e._init_testloader(tspec)
+    task = e.test_set[9]
+    e._init_weights_era5_baseline()
+    mean, std = e.predict(task)
+
+    mean = mean["T2M"].sel({"TIME": task["time"]})
+    std = std["T2M"].sel({"TIME": task["time"]})
+    mean.plot(
+        ax=axs[0, 0],
+        transform=transform,
+        cbar_kwargs={"orientation": "horizontal", "pad": pad},
+        cmap=mean_cmap,
+        robust=True,
+    )
+    std.plot(
+        ax=axs[1, 0],
+        transform=transform,
+        cbar_kwargs={"orientation": "horizontal", "pad": pad},
+        cmap=std_cmap,
+        robust=True,
+    )
+
+    axs[0, 0].set_title("Sim Only")
+    axs[1, 0].set_title("")
+
+    for i, num_stations in enumerate(nums_stations, 1):
+        tspec = replace(
+            tune,
+            no_pretraining=False,
+            num_tasks=10000,
+            num_stations=num_stations,
+        )
+        e._init_weights(tspec)
+
+        mean, std = e.predict(task)
+        mean = mean["T2M"].sel({"TIME": task["time"]})
+        std = std["T2M"].sel({"TIME": task["time"]})
+        mean.plot(
+            ax=axs[0, i],
+            transform=transform,
+            cbar_kwargs={"orientation": "horizontal", "pad": pad},
+            cmap=mean_cmap,
+            robust=True,
+        )
+        std.plot(
+            ax=axs[1, i],
+            transform=transform,
+            cbar_kwargs={"orientation": "horizontal", "pad": pad},
+            cmap=std_cmap,
+            robust=True,
+        )
+
+        axs[0, i].set_title(f"$N_{{stations}} = {num_stations}$")
+        axs[1, i].set_title("")
+
+    for ax in axs.flatten():
+        cbar = ax.collections[0].colorbar
+        cbar.ax.set_xlabel("")
+        cbar.ax.set_xticklabels(
+            [f"{int(x)}°C" for x in cbar.get_ticks()]
+        )  # set ticks of your format
+
+    offgrid_context(
+        axs[1, :],
+        task,
+        e.data_processor,
+        transform=transform,
+        add_legend=False,
+        s=2**2,
+        linewidth=0.4,
+    )
+
+    axs[0, 0].text(
+        -0.07,
+        0.55,
+        "Temperature Mean $\\mu$",
+        va="bottom",
+        ha="center",
+        rotation="vertical",
+        rotation_mode="anchor",
+        transform=axs[0, 0].transAxes,
+    )
+    axs[1, 0].text(
+        -0.07,
+        0.55,
+        "Temperature Std. Dev. $\\sigma$",
+        va="bottom",
+        ha="center",
+        rotation="vertical",
+        rotation_mode="anchor",
+        transform=axs[1, 0].transAxes,
+    )
+
+    plt.subplots_adjust(wspace=0.05, hspace=0.1)
+    save_plot(None, "superresolution", ext="png", dpi=350)
+
+
+superresolution_plot()
+# %%
+
+fig, axs, transform = init_fig(
+    2, len(nums_stations) + 1, (1.7 * (len(nums_stations) + 1), 6), True
+)
+
+axs = axs.reshape(2, len(nums_stations) + 1)
+# %%
+ax.collections[0].colorbar
+# %%
+deepsensor.plot.context_encoding(e.model, e.train_set[5], e.task_loader)
+# %%
+
+
+task = e.train_set[5]
+e.plot_prediction(task)
+deepsensor.plot.feature_maps(e.model, task, 5, cmap="jet")
