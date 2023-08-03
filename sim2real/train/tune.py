@@ -163,22 +163,22 @@ class Sim2RealTrainer(Trainer):
         c_df, t_df, aux = self.data_processor([c_df, t_df, aux])
 
         # Add spatio-temporal data.
-        x1x2_ds = construct_x1x2_ds(aux)
-        aux["x1_arr"] = x1x2_ds["x1_arr"]
-        aux["x2_arr"] = x1x2_ds["x2_arr"]
+        # x1x2_ds = construct_x1x2_ds(aux)
+        # aux["x1_arr"] = x1x2_ds["x1_arr"]
+        # aux["x2_arr"] = x1x2_ds["x2_arr"]
 
         # NOTE: Can't just use times variable because the index name is still un-processed.
         dts = c_df.index.get_level_values("time").unique()
 
         # Day of year.
-        doy_ds = construct_circ_time_ds(dts, freq="D")
-        aux["cos_D"] = doy_ds["cos_D"]
-        aux["sin_D"] = doy_ds["sin_D"]
+        # doy_ds = construct_circ_time_ds(dts, freq="D")
+        # aux["cos_D"] = doy_ds["cos_D"]
+        # aux["sin_D"] = doy_ds["sin_D"]
 
         # Time of day.
-        tod_ds = construct_circ_time_ds(dts, freq="H")
-        aux["cos_H"] = tod_ds["cos_H"]
-        aux["sin_H"] = tod_ds["sin_H"]
+        # tod_ds = construct_circ_time_ds(dts, freq="H")
+        # aux["cos_H"] = tod_ds["cos_H"]
+        # aux["sin_H"] = tod_ds["sin_H"]
 
         tl = TaskLoader([c_df, aux], t_df, links=[(0, 0)], time_freq="H")
 
@@ -549,9 +549,9 @@ def run_experiments(nums_stations, nums_tasks, tuners, era5_fracs):
 
 
 if __name__ == "__main__":
-    nums_stations = [20, 100, 500]  # 4, 20, 100, 500?
-    nums_tasks = [16, 80, 400, 2000, 10000]  # 400, 80, 16
-    tuners = [TunerType.film]
+    nums_stations = [500]  # 4, 20, 100, 500?
+    nums_tasks = [10000]  # 400, 80, 16
+    tuners = [TunerType.naive]
     era5_fracs = [0.0]  # , 0.05, 0.1, 0.2, 0.4, 0.8]
     run_experiments(nums_stations, nums_tasks, tuners, era5_fracs)
     # s2r = Sim2RealTrainer(paths, opt, out, data, model, tune)

@@ -234,7 +234,7 @@ tune_opt = OptimSpec(
     batches_per_epoch=25,
     num_epochs=100,
     lr=3e-5,
-    start_from="best",  # None, "best", "latest"
+    start_from=None,  # None, "best", "latest"
     scheduler_patience=10,
     early_stop_patience=30,
     scheduler_factor=1 / 3,
@@ -242,11 +242,11 @@ tune_opt = OptimSpec(
 
 opt = tune_opt
 
-ppu = 200  # Found from dwd.compute_ppu()
+ppu = 150  # Found from dwd.compute_ppu()
 model = ModelSpec(
-    unet_channels=(96,) * 6,
+    unet_channels=(96,) * 4,
     dim_yt=1,
-    dim_yc=(1, 7),
+    dim_yc=(1, 1),
     ppu=ppu,
     film=True,
     freeze_film=True,
@@ -279,6 +279,6 @@ tune = TuneSpec(
     val_frac_times=0.2,
     split=True,
     frequency_level=4,
-    no_pretraining=False,
+    no_pretraining=True,
     era5_frac=0.00,
 )
