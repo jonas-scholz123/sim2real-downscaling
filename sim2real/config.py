@@ -242,7 +242,7 @@ tune_opt = OptimSpec(
     scheduler_factor=1 / 3,
 )
 
-opt = tune_opt
+opt = pretrain_opt
 
 ppu = 200  # Found from dwd.compute_ppu()
 model = ModelSpec(
