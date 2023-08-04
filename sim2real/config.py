@@ -205,7 +205,7 @@ data = DataSpec(
     era5_interpolation=False,
     # This doesn't work until later.
     era5_split=False,
-    dwd_context=(0.0, 1.0),
+    dwd_context=(0, 80),
     dwd_target="all",
     norm_params=norm_params,
     # How much should sparse tasks be preferred? Larger => more sparse tasks.
@@ -266,9 +266,9 @@ out = OutputSpec(
     # Must be part of test dates.
     sample_dates=["2022-03-01 08:00:00", "2022-01-02 04:00:00"],
     spatiotemp_vals=False,
-    test_metrics=False,
+    test_metrics=True,
     era5_metric=False,
-    num_batches_test=2,
+    num_batches_test=1,
 )
 
 tune = TuneSpec(
