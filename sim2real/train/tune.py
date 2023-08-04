@@ -295,7 +295,7 @@ class Sim2RealTrainer(Trainer):
         )
 
         test = self.gen_trainset(
-            train_stations + val_stations,
+            train_stations,
             "all",
             test_stations,
             "all",
