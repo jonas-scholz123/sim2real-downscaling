@@ -352,9 +352,10 @@ def construct_convgnp(
 
     # If `dim_aux_t` is given, contruct an MLP which will use the auxiliary
     # information from the augmented inputs.
-    if dim_aux_t:
-        likelihood = nps.Augment(
-            nps.Chain(
+    if dim_aux_t is not None:
+        if dim_aux_t == 0:
+            # Only add the MLP, no augment.
+            likelihood = nps.Chain(
                 nps.MLP(
                     in_dim=conv_out_channels + dim_aux_t,
                     layers=aux_t_mlp_layers,
@@ -363,7 +364,18 @@ def construct_convgnp(
                 ),
                 likelihood,
             )
-        )
+        else:
+            likelihood = nps.Augment(
+                nps.Chain(
+                    nps.MLP(
+                        in_dim=conv_out_channels + dim_aux_t,
+                        layers=aux_t_mlp_layers,
+                        out_dim=likelihood_in_channels,
+                        dtype=dtype,
+                    ),
+                    likelihood,
+                )
+            )
         linear_after_set_conv = lambda x: x  # See the `else` clause below.
     else:
         # There is no auxiliary MLP available, so the CNN will have to produce the

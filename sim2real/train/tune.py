@@ -237,7 +237,7 @@ class Sim2RealTrainer(Trainer):
             self.train_dates,
             set_task_loader=False,
             deterministic=False,
-            split=False,
+            split=self.tspec.split,
         )
 
         out = replace(self.out, wandb=False)

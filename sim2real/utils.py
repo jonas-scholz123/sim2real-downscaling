@@ -20,7 +20,12 @@ def get_model_dir(m: ModelSpec):
     if m.film:
         channel_str += "film"
 
-    return f"{paths.out}/{m.likelihood}/ppu_{m.ppu}_channels_{channel_str}_dimyt_{m.dim_yt}_dim_yc_{m.dim_yc}"
+    if m.dim_aux_t is not None:
+        mlp_str = "_mlp_" + str(m.aux_t_mlp_layers)[1:-1].replace(", ", "_")
+    else:
+        mlp_str = ""
+
+    return f"{paths.out}/{m.likelihood}/ppu_{m.ppu}_channels_{channel_str}{mlp_str}_dimyt_{m.dim_yt}_dim_yc_{m.dim_yc}"
 
 
 def exp_dir_sim(m: ModelSpec):

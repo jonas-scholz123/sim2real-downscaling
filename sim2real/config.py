@@ -62,6 +62,8 @@ class ModelSpec:
     decoder_scale: float
     encoder_scales_learnable: bool
     decoder_scale_learnable: bool
+    dim_aux_t: int
+    aux_t_mlp_layers: tuple
 
 
 @dataclass
@@ -205,7 +207,7 @@ data = DataSpec(
     era5_interpolation=False,
     # This doesn't work until later.
     era5_split=False,
-    dwd_context=(0, 80),
+    dwd_context=(0.0, 1.0),
     dwd_target="all",
     norm_params=norm_params,
     # How much should sparse tasks be preferred? Larger => more sparse tasks.
@@ -245,6 +247,8 @@ opt = tune_opt
 ppu = 200  # Found from dwd.compute_ppu()
 model = ModelSpec(
     unet_channels=(96,) * 6,
+    aux_t_mlp_layers=(128, 128, 128),
+    dim_aux_t=0,  # No aux data passed at MLP. Set to None for no MLP at all.
     dim_yt=1,
     dim_yc=(1, 7),
     ppu=ppu,

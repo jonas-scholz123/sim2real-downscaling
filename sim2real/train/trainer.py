@@ -217,13 +217,13 @@ class Trainer(ABC):
         self.pbar = tqdm(range(self.start_epoch, self.opt.num_epochs + 1))
 
         if self.start_epoch == 1:
-           # Before training, get initial eval and plots.
-           val_loss = self.compute_loglik(self.cv_loader)
-           self.metrics[names.val_loss] = val_loss
-           self.metrics[names.train_loss] = val_loss
-           self.metrics[names.epoch] = 0
-           self._log()
-           self.plot_sample_tasks(0)
+            # Before training, get initial eval and plots.
+            val_loss = self.compute_loglik(self.cv_loader)
+            self.metrics[names.val_loss] = val_loss
+            self.metrics[names.train_loss] = val_loss
+            self.metrics[names.epoch] = 0
+            self._log()
+            self.plot_sample_tasks(0)
 
         for epoch in self.pbar:
             batch_losses = []
@@ -269,11 +269,14 @@ class Trainer(ABC):
             decoder_scale=self.mspec.decoder_scale,
             encoder_scales_learnable=self.mspec.encoder_scales_learnable,
             decoder_scale_learnable=self.mspec.decoder_scale_learnable,
+            aux_t_mlp_layers=self.mspec.aux_t_mlp_layers,
+            dim_aux_t=self.mspec.dim_aux_t,
             film=self.mspec.film,
             freeze_film=self.mspec.freeze_film,
         )
 
         model = convcnp.from_taskloader(self.task_loader, **model_kwargs)
+        print(model)
         model = ConvNP(self.data_processor, self.task_loader, model)
         try:
             self.best_val_loss = load_weights(None, self.best_path, loss_only=True)[1]
