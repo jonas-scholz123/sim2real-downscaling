@@ -197,7 +197,7 @@ class Evaluator(Sim2RealTrainer):
         # test_loader = self._init_testloader(tspec)
         self.test_loader = self._init_testloader(tspec)
 
-        nlls = self.evaluate_loglik(self.test_set)
+        nlls = self.evaluate_loglik(self.test_set, added_var=0.15)
         self._set_result(tspec, "nll", np.mean(nlls))
         self._set_result(tspec, "nll_std", np.std(nlls) / np.sqrt(len(nlls)))
 
@@ -472,12 +472,12 @@ def generate_tspecs(
 
 
 if __name__ == "__main__":
-    num_samples = 1024
+    num_samples = 512
 
-    nums_stations = [500, 100, 20]  # 4, 20, 100, 500?
+    nums_stations = [20, 100]  # 4, 20, 100, 500?
     nums_tasks = [16, 80, 400, 2000, 10000]  # 400, 80, 16
     tuners = [TunerType.naive, TunerType.film, TunerType.none]
-    # tuners = [TunerType.none]
+    # tuners = [TunerType.naive]
     include_real_only = True
     e = Evaluator(paths, opt, out, data, model, tune, num_samples, False)
 
@@ -505,14 +505,9 @@ if __name__ == "__main__":
             det_result, nlls = e.evaluate_model(tspec)
             det_results.append(det_result)
             nll_results.append(nlls)
-
-            # e.plot_locations(
-            #    [e.train_stations, e.val_stations, e.test_stations],
-            #    labels=["Train", "Val", "Test"],
-            # )
-            # plt.show()
+            # e.test_loader = e._init_testloader(tspec)
             # for task in iter(e.test_set):
-            #    e.plot_prediction(task)
+            #   e.plot_prediction(task)
             # plt.show()
             # e.save()
         except FileNotFoundError as err:
@@ -520,6 +515,10 @@ if __name__ == "__main__":
             continue
         e.save()
     e.save()
+    # %%
+    e.res
+    e._load_results()
+    e.res
     # %%
 
     ns = np.array([0.05, 0.1, 0.15, 0.2, 0.25])
@@ -1118,10 +1117,10 @@ def results_plot():
     e._load_results()
     df = e.res
     nums_stations = [20, 100, 500]
-    nums_tasks = [16, 80, 400, 10000]
+    nums_tasks = [16, 80, 400, 2000, 10000]
     ylabels = ["Negative Log-Likelihood $\mathcal{L}$", "Mean Absolute Error"]
 
-    fig, axss = plt.subplots(2, len(nums_stations), figsize=(6, 5))
+    fig, axss = plt.subplots(2, len(nums_stations), figsize=(6, 5), sharex=False)
     for j, (quantity, ylabel) in enumerate(zip(["nll", "mae"], ylabels)):
         axs = axss[j]
         for i, num_stations in enumerate(nums_stations):
@@ -1146,19 +1145,26 @@ def results_plot():
                     & (e.res["tuner"] == str(TunerType.none))
                 ][quantity]
             )
-            axs[i].axhline(sim_only, label="Sim Only", linestyle="--", color="r")
-            axs[i].plot(xs, naive_ys, "x", label="Naive")
-            axs[i].plot(xs_film, film_ys, "x", label="FiLM")
+            # axs[i].axhline(sim_only, label="Sim Only", linestyle="--", color="r")
+            axs[i].plot(xs, naive_ys, "x", label="Sim2Real")
+            # axs[i].plot(xs_film, film_ys, "x", label="FiLM")
             axs[i].set_title(f"$N_{{stations}} = {num_stations}$")
             axs[i].set_xticks(range(len(nums_tasks)))
             axs[i].set_xticklabels(nums_tasks)
-            axs[i].legend()
+
             axs[i].set_xlim(-0.5, len(nums_tasks) - 0.5)
             axss[1, i].set_xlabel("$N_{times}$")
         axs[0].set_ylabel(ylabel)
-    plt.tight_layout()
+    axs[0].legend(
+        loc="center",
+        bbox_transform=fig.transFigure,
+        bbox_to_anchor=(0.5, 0.5),
+        ncol=2,
+    )
+    plt.subplots_adjust(hspace=0.5, wspace=0.4)
 
 
+results_plot()
 # %%
 e._load_results()
 
@@ -1166,6 +1172,7 @@ nums_stations = [20, 100, 500]
 nums_tasks = [16, 80, 400, 10000]
 
 fig, axs = plt.subplots(1, len(nums_stations), figsize=(6, 3))
+
 for i, num_stations in enumerate(nums_stations):
     df = e.res[e.res["tuner"] == str(TunerType.naive)]
     df = df[df["num_stations"] == num_stations]
@@ -1191,6 +1198,7 @@ for i, num_stations in enumerate(nums_stations):
     axs[0].set_ylabel("Negative Log-Likelihood $\mathcal{L}$")
     axs[i].legend()
 plt.tight_layout()
+save_plot(None, "results_sim2real_vs_real")
 # %%
 
 
