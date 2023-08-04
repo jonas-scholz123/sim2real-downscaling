@@ -476,7 +476,7 @@ if __name__ == "__main__":
 
     nums_stations = [20, 100]  # 4, 20, 100, 500?
     nums_tasks = [16, 80, 400, 2000, 10000]  # 400, 80, 16
-    tuners = [TunerType.naive, TunerType.film, TunerType.none]
+    tuners = [TunerType.naive, TunerType.film]
     # tuners = [TunerType.naive]
     include_real_only = True
     e = Evaluator(paths, opt, out, data, model, tune, num_samples, False)
