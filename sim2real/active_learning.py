@@ -17,7 +17,7 @@ import lab as B
 
 from sim2real.config import opt, out, model, data, paths, tune
 from sim2real.utils import ensure_dir_exists
-from sim2real.plots import adjust_plot
+from sim2real.plots import adjust_plot, init_fig, save_plot
 from sim2real.test import Evaluator
 
 import matplotlib.pyplot as plt
@@ -132,6 +132,8 @@ def placement_plot(
     ax.legend(labels=["Existing", "Proposed"], loc="best")
 
 
+# %%
+
 if __name__ == "__main__":
     nums_stations = [500, 100, 20]
 
@@ -140,3 +142,135 @@ if __name__ == "__main__":
         for tuned in [True, False]:
             print(f"N Stations = {num_stations}, Tuned = {tuned}")
             active_learning_run(e, num_stations, tuned)
+# %%
+e = Evaluator(paths, opt, out, data, model, tune, 1024, False)
+
+
+# %%
+
+fig, axs, crs = init_fig(ret_transform=True)
+placement_plot(e.test_set[0], X_new_df, e.data_processor, out.data_crs, ax=axs[0])
+#
+# placement_plot(test_tasks[0], X_new_df, e.data_processor, crs, figsize=8, ax=axs[0])
+# plt.show()
+# %%
+
+
+def acquisition_fn_plot(
+    task,
+    acquisition_fn_ds,
+    X_new_df,
+    data_processor,
+    crs,
+    axes,
+    cmap="Greys_r",
+    figsize=3,
+    add_colorbar=True,
+    max_ncol=5,
+    **kwargs,
+):
+    if "time" in acquisition_fn_ds.dims:
+        # Average over time
+        acquisition_fn_ds = acquisition_fn_ds.mean("time")
+    if "sample" in acquisition_fn_ds.dims:
+        # Average over samples
+        acquisition_fn_ds = acquisition_fn_ds.mean("sample")
+
+    iters = acquisition_fn_ds.iteration.values
+    if iters.size == 1:
+        n_iters = 1
+    else:
+        n_iters = len(iters)
+    ncols = np.min([max_ncol, n_iters])
+
+    # axes = axes.ravel()
+    if add_colorbar:
+        min, max = acquisition_fn_ds.min(), acquisition_fn_ds.max()
+    else:
+        # Use different colour scales for each iteration
+        min, max = None, None
+    for i, iteration in enumerate(iters):
+        ax = axes[i]
+        acquisition_fn_ds.sel(iteration=iteration).plot(
+            ax=ax, cmap=cmap, vmin=min, vmax=max, add_colorbar=False, **kwargs
+        )
+
+        ax.set_title(f"Iteration {iteration}")
+        ax.scatter(
+            *X_new_df.loc[slice(0, iteration)].values.T[::-1],
+            s=5**2,
+            c="r",
+            marker="x",
+            linewidths=1,
+            label="Proposed",
+            **kwargs,
+        )
+
+    offgrid_context(
+        axes,
+        task,
+        data_processor,
+        s=2**2,
+        linewidths=0.3,
+        colors=["black"],
+        add_legend=False,
+        **kwargs,
+    )
+
+
+def station_placement_plot(num_stations):
+    fig, axs, transform = init_fig(2, 5, (10, 5.0), True)
+
+    for i, tuned in enumerate([False, True]):
+        X_new_df = load_X_new_df(num_stations, tuned)
+        acquisition_fn_ds = load_acq_ds(num_stations, tuned)
+
+        acquisition_fn_plot(
+            e.test_set[0],
+            acquisition_fn_ds,
+            X_new_df,
+            e.data_processor,
+            transform,
+            axs[5 * i : 5 * i + 5],
+            transform=transform,
+            add_colorbar=True,
+        )
+    axs[0].legend(
+        labels=["Proposed", "Existing"],
+        loc="lower center",
+        bbox_to_anchor=[2.9, 1.15],
+        ncol=2,
+    )
+
+    axs[0].text(
+        -0.07,
+        0.55,
+        "Pretraining Only",
+        va="bottom",
+        ha="center",
+        rotation="vertical",
+        rotation_mode="anchor",
+        transform=axs[0].transAxes,
+    )
+
+    axs[5].text(
+        -0.07,
+        0.55,
+        "Finetuned",
+        va="bottom",
+        ha="center",
+        rotation="vertical",
+        rotation_mode="anchor",
+        transform=axs[5].transAxes,
+    )
+
+    fig.suptitle(
+        f"$N_{{stations}} = {num_stations}$", horizontalalignment="left", x=0.15, y=0.97
+    )
+    save_plot(None, f"sensor_placement_N_stat_{num_stations}", fig=fig)
+
+
+for num_stations in [20, 100, 500]:
+    station_placement_plot(num_stations)
+# %%
+e.plot_train_val()
