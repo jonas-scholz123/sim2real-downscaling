@@ -472,7 +472,7 @@ def generate_tspecs(
 
 
 if __name__ == "__main__":
-    num_samples = 32
+    num_samples = 1024
 
     nums_stations = [500, 100, 20]  # 4, 20, 100, 500?
     nums_tasks = [16, 80, 400, 2000, 10000]  # 400, 80, 16
