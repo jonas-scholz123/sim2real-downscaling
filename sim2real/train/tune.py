@@ -237,7 +237,7 @@ class Sim2RealTrainer(Trainer):
             self.train_dates,
             set_task_loader=False,
             deterministic=False,
-            split=True,
+            split=False,
         )
 
         out = replace(self.out, wandb=False)
@@ -549,7 +549,7 @@ def run_experiments(nums_stations, nums_tasks, tuners, era5_fracs):
 
 
 if __name__ == "__main__":
-    nums_stations = [500]  # 4, 20, 100, 500?
+    nums_stations = [100]  # 4, 20, 100, 500?
     nums_tasks = [10000]  # 400, 80, 16
     tuners = [TunerType.naive]
     era5_fracs = [0.0]  # , 0.05, 0.1, 0.2, 0.4, 0.8]
