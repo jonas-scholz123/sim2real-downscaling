@@ -216,7 +216,7 @@ data = DataSpec(
 
 pretrain_opt = OptimSpec(
     seed=42,
-    device="cuda",
+    device="cpu",
     batch_size=16,
     batch_size_val=512,
     batches_per_epoch=200,
@@ -230,7 +230,7 @@ pretrain_opt = OptimSpec(
 
 tune_opt = OptimSpec(
     seed=42,
-    device="cuda",
+    device="cpu",
     batch_size=16,
     batch_size_val=512,
     batches_per_epoch=25,
@@ -262,7 +262,7 @@ model = ModelSpec(
 )
 
 out = OutputSpec(
-    wandb=True,
+    wandb=False,
     plots=True,
     wandb_name=None,
     fig_crs=ccrs.TransverseMercator(central_longitude=10, approx=False),
@@ -283,6 +283,6 @@ tune = TuneSpec(
     val_frac_times=0.2,
     split=True,
     frequency_level=4,
-    no_pretraining=True,
+    no_pretraining=False,
     era5_frac=0.00,
 )
