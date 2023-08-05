@@ -197,7 +197,13 @@ class Evaluator(Sim2RealTrainer):
         # test_loader = self._init_testloader(tspec)
         self.test_loader = self._init_testloader(tspec)
 
-        nlls = self.evaluate_loglik(self.test_set, added_var=0.15)
+        if tspec.num_stations == 500:
+            added_var = 0
+        else:
+            # Adjust variance offfset similar to ERA5
+            added_var = 0.12
+
+        nlls = self.evaluate_loglik(self.test_set, added_var=added_var)
         self._set_result(tspec, "nll", np.mean(nlls))
         self._set_result(tspec, "nll_std", np.std(nlls) / np.sqrt(len(nlls)))
 
@@ -209,9 +215,6 @@ class Evaluator(Sim2RealTrainer):
         self._set_result(tspec, "mae_std", mae_std)
 
         return df, nlls
-
-    # def evaluate_loglik(self, test_loader):
-    #    return self.compute_loglik(test_loader)
 
     def evaluate_loglik(self, test_set, added_var=0.0):
         with torch.no_grad():
@@ -507,22 +510,19 @@ def evaluate_many(e, nums_stations, nums_tasks, tuners, include_real_only):
 
 
 if __name__ == "__main__":
-    num_samples = 2
-    nums_stations = [20, 100]  # 4, 20, 100, 500?
+    num_samples = 512
+    nums_stations = [20, 100, 500]  # 4, 20, 100, 500?
     nums_tasks = [16, 80, 400, 2000, 10000]  # 400, 80, 16
-    tuners = [TunerType.naive, TunerType.film]
-    include_real_only = False
-    e = Evaluator(paths, opt, out, data, model, tune, num_samples, False)
+    tuners = [TunerType.naive, TunerType.none]
+    include_real_only = True
+    e = Evaluator(paths, opt, out, data, model, tune, num_samples, load=False)
     evaluate_many(e, nums_stations, nums_tasks, tuners, include_real_only)
 
     # %%
 
     # %%
     e.res
-    e._load_results()
-    e.res
     # %%
-
     ns = np.array([0.05, 0.1, 0.15, 0.2, 0.25])
 
     all_results, all_stds = [], []
@@ -536,7 +536,6 @@ if __name__ == "__main__":
             era5_frac=0.0,
         )
         e._init_weights_era5_baseline()
-        ns = [0.05, 0.1, 0.15, 0.2, 0.25]
         results, stds = e.var_offset_grid_search(t, ns)
         all_results.append(results)
         all_stds.append(stds)
@@ -1139,7 +1138,7 @@ if __name__ == "__main__":
                         & (e.res["tuner"] == str(TunerType.none))
                     ][quantity]
                 )
-                # axs[i].axhline(sim_only, label="Sim Only", linestyle="--", color="r")
+                axs[i].axhline(sim_only, label="Sim Only", linestyle="--", color="r")
                 axs[i].plot(xs, naive_ys, "x", label="Sim2Real")
                 # axs[i].plot(xs_film, film_ys, "x", label="FiLM")
                 axs[i].set_title(f"$N_{{stations}} = {num_stations}$")
