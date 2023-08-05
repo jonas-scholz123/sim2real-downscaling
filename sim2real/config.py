@@ -188,7 +188,7 @@ paths = Paths(
     time_split=f"{root}/data/processed/splits/times.feather",
     out=f"{root}/_outputs",
     test_results=f"{root}/_outputs/test_results.csv",
-    active_learning_dir=f"{root}/_outputs/from_hpc/_outputs/active_learning/",
+    active_learning_dir=f"{root}/_outputs/active_learning/",
     shapefile=f"{root}/data/shapefiles/DEU_adm0.shp",
 )
 
@@ -248,7 +248,7 @@ ppu = 200  # Found from dwd.compute_ppu()
 model = ModelSpec(
     unet_channels=(96,) * 6,
     aux_t_mlp_layers=(128, 128, 128),
-    dim_aux_t=None,  # No aux data passed at MLP. Set to None for no MLP at all.
+    dim_aux_t=0,  # No aux data passed at MLP. Set to None for no MLP at all.
     dim_yt=1,
     dim_yc=(1, 7),
     ppu=ppu,
@@ -283,6 +283,6 @@ tune = TuneSpec(
     val_frac_times=0.2,
     split=True,
     frequency_level=4,
-    no_pretraining=True,
+    no_pretraining=False,
     era5_frac=0.00,
 )
