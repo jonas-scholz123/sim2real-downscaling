@@ -471,18 +471,7 @@ def generate_tspecs(
     return tspecs
 
 
-if __name__ == "__main__":
-    num_samples = 512
-
-    nums_stations = [20, 100]  # 4, 20, 100, 500?
-    nums_tasks = [16, 80, 400, 2000, 10000]  # 400, 80, 16
-    tuners = [TunerType.naive, TunerType.film]
-    # tuners = [TunerType.naive]
-    include_real_only = True
-    e = Evaluator(paths, opt, out, data, model, tune, num_samples, False)
-
-    # %%
-
+def evaluate_many(e, nums_stations, nums_tasks, tuners, include_real_only):
     tspecs = generate_tspecs(
         tune,
         nums_stations,
@@ -515,6 +504,19 @@ if __name__ == "__main__":
             continue
         e.save()
     e.save()
+
+
+if __name__ == "__main__":
+    num_samples = 2
+    nums_stations = [20, 100]  # 4, 20, 100, 500?
+    nums_tasks = [16, 80, 400, 2000, 10000]  # 400, 80, 16
+    tuners = [TunerType.naive, TunerType.film]
+    include_real_only = False
+    e = Evaluator(paths, opt, out, data, model, tune, num_samples, False)
+    evaluate_many(e, nums_stations, nums_tasks, tuners, include_real_only)
+
+    # %%
+
     # %%
     e.res
     e._load_results()
