@@ -512,10 +512,10 @@ def evaluate_many(e, nums_stations, nums_tasks, tuners, include_real_only):
 if __name__ == "__main__":
     num_samples = 512
     nums_stations = [20, 100, 500]  # 4, 20, 100, 500?
-    nums_tasks = [16, 80, 400, 2000, 10000]  # 400, 80, 16
-    tuners = [TunerType.naive, TunerType.none]
+    nums_tasks = [2000]  # 400, 80, 16
+    tuners = []
     include_real_only = True
-    e = Evaluator(paths, opt, out, data, model, tune, num_samples, load=False)
+    e = Evaluator(paths, opt, out, data, model, tune, num_samples, load=True)
     evaluate_many(e, nums_stations, nums_tasks, tuners, include_real_only)
 
     # %%
@@ -1110,7 +1110,9 @@ if __name__ == "__main__":
         nums_tasks = [16, 80, 400, 2000, 10000]
         ylabels = ["Negative Log-Likelihood $\mathcal{L}$", "Mean Absolute Error"]
 
-        fig, axss = plt.subplots(2, len(nums_stations), figsize=(6, 5), sharex=False)
+        fig, axss = plt.subplots(
+            2, len(nums_stations), figsize=(6, 4), sharex=False, sharey="row"
+        )
         for j, (quantity, ylabel) in enumerate(zip(["nll", "mae"], ylabels)):
             axs = axss[j]
             for i, num_stations in enumerate(nums_stations):
@@ -1127,10 +1129,17 @@ if __name__ == "__main__":
                     & (df["tuner"] == str(TunerType.film))
                 ].sort_values("num_tasks")[quantity]
 
+                real_only = e.res[
+                    e.res["num_tasks"].isin(nums_tasks)
+                    & (e.res["pretrained"] == False)
+                    & (e.res["num_stations"] == num_stations)
+                ].sort_values("num_tasks")["nll"]
+
                 naive_ys = df[
                     df["num_tasks"].isin(nums_tasks)
                     & (df["tuner"] == str(TunerType.naive))
                 ].sort_values("num_tasks")[quantity]
+                print(naive_ys)
 
                 sim_only = float(
                     e.res[
@@ -1140,23 +1149,25 @@ if __name__ == "__main__":
                 )
                 axs[i].axhline(sim_only, label="Sim Only", linestyle="--", color="r")
                 axs[i].plot(xs, naive_ys, "x", label="Sim2Real")
+                # axs[i].plot(xs_film, real_only, "x", label="Real Only")
                 # axs[i].plot(xs_film, film_ys, "x", label="FiLM")
                 axs[i].set_title(f"$N_{{stations}} = {num_stations}$")
                 axs[i].set_xticks(range(len(nums_tasks)))
-                axs[i].set_xticklabels(nums_tasks)
+                axs[i].set_xticklabels(nums_tasks, rotation=30)
 
                 axs[i].set_xlim(-0.5, len(nums_tasks) - 0.5)
                 axss[1, i].set_xlabel("$N_{times}$")
             axs[0].set_ylabel(ylabel)
         axs[0].legend(
-            loc="center",
-            bbox_transform=fig.transFigure,
-            bbox_to_anchor=(0.5, 0.5),
-            ncol=2,
+            loc="upper left",
+            bbox_transform=axss[0, 0].transAxes,
+            bbox_to_anchor=(0.0, 1.0),
+            ncol=1,
         )
-        plt.subplots_adjust(hspace=0.5, wspace=0.4)
+        plt.subplots_adjust(hspace=0.5, wspace=0.1)
 
     results_plot()
+    save_plot(None, "results_temperature")
     # %%
     e._load_results()
 
