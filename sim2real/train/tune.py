@@ -549,8 +549,8 @@ def run_experiments(nums_stations, nums_tasks, tuners, era5_fracs):
 
 
 if __name__ == "__main__":
-    nums_stations = [100]  # 4, 20, 100, 500?
-    nums_tasks = [10000]  # 400, 80, 16
+    nums_stations = [20, 100, 500]  # 4, 20, 100, 500?
+    nums_tasks = [2000]  # 400, 80, 16
     tuners = [TunerType.naive]
     era5_fracs = [0.0]  # , 0.05, 0.1, 0.2, 0.4, 0.8]
     run_experiments(nums_stations, nums_tasks, tuners, era5_fracs)
