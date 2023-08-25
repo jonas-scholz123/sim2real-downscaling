@@ -669,10 +669,10 @@ def datetime_split_plot():
     dts = full.index.get_level_values(names.time).unique()
 
     train, val, test = train_val_test_dts(dts)
-    plt.figure(figsize=(10, 1))
-    plt.scatter(train, [1 for _ in train], s=100, marker="|", label="train")
-    plt.scatter(val, [1 for _ in val], s=100, marker="|", label="validation")
-    plt.scatter(test, [1 for _ in test], s=100, marker="|", label="evaluation")
+    plt.figure(figsize=(6, 1))
+    plt.scatter(train, [1 for _ in train], s=100, marker="|", label="Train")
+    plt.scatter(val, [1 for _ in val], s=100, marker="|", label="Val")
+    plt.scatter(test, [1 for _ in test], s=100, marker="|", label="Test")
 
     plt.xlim(pd.Timestamp("2021-11-03"), pd.Timestamp("2022-04-01"))
     plt.ylim(0.5, 2)
@@ -894,8 +894,9 @@ def plot_train_val(train, val):
 
 
 if __name__ == "__main__":
-    download_dwd()
-    process_dwd()
+    datetime_split_plot()
+    # download_dwd()
+    # process_dwd()
     # process_value_stations()
     # save_station_splits("random")
     # ss = load_station_splits()

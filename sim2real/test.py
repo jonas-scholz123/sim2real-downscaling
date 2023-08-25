@@ -197,7 +197,7 @@ class Evaluator(Sim2RealTrainer):
         # test_loader = self._init_testloader(tspec)
         self.test_loader = self._init_testloader(tspec)
 
-        if tspec.num_stations == 500:
+        if tspec.num_stations == 500 and tspec.num_tasks > 400:
             added_var = 0
         else:
             # Adjust variance offfset similar to ERA5
@@ -510,15 +510,14 @@ def evaluate_many(e, nums_stations, nums_tasks, tuners, include_real_only):
 
 
 if __name__ == "__main__":
-    num_samples = 512
-    nums_stations = [20, 100, 500]  # 4, 20, 100, 500?
-    nums_tasks = [2000]  # 400, 80, 16
-    tuners = []
-    include_real_only = True
+    num_samples = 256
+    nums_stations = [500]  # 4, 20, 100, 500?
+    nums_tasks = [16, 80, 400]  # 400, 80, 16
+    tuners = [TunerType.naive]
+    include_real_only = False
     e = Evaluator(paths, opt, out, data, model, tune, num_samples, load=True)
-    evaluate_many(e, nums_stations, nums_tasks, tuners, include_real_only)
-
     # %%
+    evaluate_many(e, nums_stations, nums_tasks, tuners, include_real_only)
 
     # %%
     e.res
@@ -990,10 +989,13 @@ if __name__ == "__main__":
     fig, axs = plt.subplots(2, 2, sharex=True, sharey=True)
 
     e._init_weights_era5_baseline()
-    e.alps_plot(t, fig=fig, axs=axs[:, 0])
+    t = e.test_set[0]
+    # e.alps_plot(t, fig=fig, axs=axs[:, 0])
+    alps_plot(e, t, fig=fig, axs=axs[:, 0])
 
+    tspec = replace(tune, num_tasks=10000, num_stations=500)
     e._init_weights(tspec)
-    e.alps_plot(t, fig=fig, axs=axs[:, 1])
+    alps_plot(e, t, fig=fig, axs=axs[:, 1])
 
     fig.suptitle("")
 
@@ -1133,13 +1135,12 @@ if __name__ == "__main__":
                     e.res["num_tasks"].isin(nums_tasks)
                     & (e.res["pretrained"] == False)
                     & (e.res["num_stations"] == num_stations)
-                ].sort_values("num_tasks")["nll"]
+                ].sort_values("num_tasks")[quantity]
 
                 naive_ys = df[
                     df["num_tasks"].isin(nums_tasks)
                     & (df["tuner"] == str(TunerType.naive))
                 ].sort_values("num_tasks")[quantity]
-                print(naive_ys)
 
                 sim_only = float(
                     e.res[
@@ -1147,10 +1148,13 @@ if __name__ == "__main__":
                         & (e.res["tuner"] == str(TunerType.none))
                     ][quantity]
                 )
-                axs[i].axhline(sim_only, label="Sim Only", linestyle="--", color="r")
-                axs[i].plot(xs, naive_ys, "x", label="Sim2Real")
-                # axs[i].plot(xs_film, real_only, "x", label="Real Only")
-                # axs[i].plot(xs_film, film_ys, "x", label="FiLM")
+                axs[i].axhline(
+                    sim_only, label="Sim Only", linestyle="dotted", color="r"
+                )
+                axs[i].plot(xs, naive_ys, "+", label="Sim2Real")
+                # axs[i].plot(xs, real_only, "+", label="Real Only")
+                # axs[i].plot(xs_film, real_only, "+", label="Real Only")
+                # axs[i].plot(xs_film, film_ys, "+", label="FiLM")
                 axs[i].set_title(f"$N_{{stations}} = {num_stations}$")
                 axs[i].set_xticks(range(len(nums_tasks)))
                 axs[i].set_xticklabels(nums_tasks, rotation=30)
@@ -1159,9 +1163,9 @@ if __name__ == "__main__":
                 axss[1, i].set_xlabel("$N_{times}$")
             axs[0].set_ylabel(ylabel)
         axs[0].legend(
-            loc="upper left",
+            loc="lower left",
             bbox_transform=axss[0, 0].transAxes,
-            bbox_to_anchor=(0.0, 1.0),
+            bbox_to_anchor=(0.0, 0.0),
             ncol=1,
         )
         plt.subplots_adjust(hspace=0.5, wspace=0.1)
@@ -1172,35 +1176,47 @@ if __name__ == "__main__":
     e._load_results()
 
     nums_stations = [20, 100, 500]
-    nums_tasks = [16, 80, 400, 10000]
+    nums_tasks = [16, 80, 400, 2000, 10000]
 
-    fig, axs = plt.subplots(1, len(nums_stations), figsize=(6, 3))
+    quantities = ["nll", "mae"]
+    quantity_names = [
+        "Negative Log-Likelihood $\mathcal{L}$",
+        "Mean Absolute Error [°C]",
+    ]
 
-    for i, num_stations in enumerate(nums_stations):
-        df = e.res[e.res["tuner"] == str(TunerType.naive)]
-        df = df[df["num_stations"] == num_stations]
+    fig, axss = plt.subplots(
+        len(quantities), len(nums_stations), figsize=(6, 4), sharey="row"
+    )
 
-        xs = np.array(range(len(nums_tasks)))
-        xs_film = xs + 0.1
+    for j, quantity in enumerate(quantities):
+        axs = axss[j]
+        for i, num_stations in enumerate(nums_stations):
+            df = e.res[e.res["tuner"] == str(TunerType.naive)]
+            df = df[df["num_stations"] == num_stations]
 
-        real_only = df[
-            df["num_tasks"].isin(nums_tasks) & (df["pretrained"] == False)
-        ].sort_values("num_tasks")["nll"]
+            xs = np.array(range(len(nums_tasks)))
+            xs_film = xs + 0.1
 
-        sim2real = df[
-            df["num_tasks"].isin(nums_tasks) & (df["pretrained"] == True)
-        ].sort_values("num_tasks")["nll"]
+            real_only = df[
+                df["num_tasks"].isin(nums_tasks) & (df["pretrained"] == False)
+            ].sort_values("num_tasks")[quantity]
 
-        axs[i].plot(xs, sim2real, "x", label="Sim2Real")
-        axs[i].plot(xs_film, real_only, "x", label="Real Only")
-        axs[i].set_title(f"$N_{{stations}} = {num_stations}$")
-        axs[i].set_xticks(range(len(nums_tasks)))
-        axs[i].set_xticklabels(nums_tasks)
-        axs[i].set_xlim(-0.5, len(nums_tasks) - 0.5)
-        axs[i].set_xlabel("$N_{times}$")
-        axs[0].set_ylabel("Negative Log-Likelihood $\mathcal{L}$")
-        axs[i].legend()
-    plt.tight_layout()
+            sim2real = df[
+                df["num_tasks"].isin(nums_tasks) & (df["pretrained"] == True)
+            ].sort_values("num_tasks")[quantity]
+
+            axs[i].plot(xs, sim2real, "+", label="Sim2Real")
+            axs[i].plot(xs_film, real_only, "+", label="Real Only")
+            axss[0, i].set_title(f"$N_{{stations}} = {num_stations}$")
+            axs[i].set_xticks(range(len(nums_tasks)))
+            axs[i].set_xticklabels(nums_tasks, rotation=30)
+            axs[i].set_xlim(-0.5, len(nums_tasks) - 0.5)
+            axss[1, i].set_xlabel("$N_{times}$")
+            axs[0].set_ylabel(quantity_names[j])
+    axss[0, 0].legend(
+        loc="center", bbox_transform=fig.transFigure, bbox_to_anchor=(0.5, 1.0), ncol=2
+    )
+    plt.subplots_adjust(hspace=0.4)
     save_plot(None, "results_sim2real_vs_real")
     # %%
 

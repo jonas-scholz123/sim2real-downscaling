@@ -308,4 +308,4 @@ def load_time_splits():
 
 
 if __name__ == "__main__":
-    print(load_station_splits())
+    dwd = DWDStationData(paths)

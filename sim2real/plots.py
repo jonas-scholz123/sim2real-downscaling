@@ -16,20 +16,26 @@ matplotlib.rcParams["mathtext.fontset"] = "stix"
 matplotlib.rcParams["font.family"] = "STIXGeneral"
 
 
-def save_plot(exp_path, name, fig=None):
+def save_plot(exp_path, name, fig=None, ext="pdf", **kwargs):
     if exp_path is None:
-        path = f"{paths.out}/figures/{name}.pdf"
+        path = f"{paths.out}/figures/{name}.{ext}"
     else:
-        path = f"{exp_path}/plots/{name}.pdf"
+        path = f"{exp_path}/plots/{name}.{ext}"
     ensure_dir_exists(path)
     if fig is None:
-        plt.savefig(path, bbox_inches="tight")
+        plt.savefig(path, bbox_inches="tight", **kwargs)
     else:
-        fig.savefig(path, bbox_inches="tight")
+        fig.savefig(path, bbox_inches="tight", **kwargs)
 
 
 def plot_geopandas(
-    gdf, column=names.temp, fig_ax=None, legend=True, vmin=None, vmax=None
+    gdf,
+    column=names.temp,
+    fig_ax=None,
+    legend=True,
+    vmin=None,
+    vmax=None,
+    **kwargs,
 ):
     if fig_ax is not None:
         fig, ax = fig_ax
@@ -37,7 +43,7 @@ def plot_geopandas(
         fig, ax = plt.subplots(1, 1, figsize=(10, 10))
     country = gpd.read_file("../data/shapefiles/DEU_adm0.shp")
     country.crs = "epsg:4326"
-    gdf.plot(column=column, ax=ax, legend=legend, vmin=vmin, vmax=vmax)
+    gdf.plot(column=column, ax=ax, legend=legend, vmin=vmin, vmax=vmax, **kwargs)
     country.plot(edgecolor="black", ax=ax, alpha=1, facecolor="none")
     return fig, ax
 
@@ -64,18 +70,22 @@ def init_fig(nrows=1, ncols=1, figsize=(4, 4), ret_transform=False):
     fig, axs = plt.subplots(
         subplot_kw={"projection": proj}, nrows=nrows, ncols=ncols, figsize=figsize
     )
-    bounds = [*data.bounds.lon, *data.bounds.lat]
 
     axs = np.array(axs).flatten()
 
     for ax in axs:
-        ax.set_extent(bounds, crs=ccrs.PlateCarree())
-        ax.add_feature(feature.BORDERS, linewidth=0.25)
-        ax.coastlines(linewidth=0.25)
+        add_germany_lines(ax)
 
     if ret_transform:
         return fig, axs, ccrs.PlateCarree()
     return fig, axs
+
+
+def add_germany_lines(ax):
+    bounds = [*data.bounds.lon, *data.bounds.lat]
+    ax.set_extent(bounds, crs=ccrs.PlateCarree())
+    ax.add_feature(feature.BORDERS, linewidth=0.25)
+    ax.coastlines(linewidth=0.25)
 
 
 def adjust_plot(fig=None, axs=None):

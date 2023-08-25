@@ -12,17 +12,12 @@ from sim2real.datasets import DWDStationData
 from sim2real.plots import plot_geopandas
 from sim2real.config import paths, names
 from sim2real.gridder import Gridder
+from sim2real.plots import save_plot
 
 # %%
 dwd_sd = DWDStationData(paths)
 era5 = xr.open_dataset(paths.era5)
 # %%
-
-
-def saveplot(name):
-    target_dir = "./outputs/figures/era5_investigation/"
-    os.makedirs(target_dir, exist_ok=True)
-    plt.savefig(f"{target_dir}/{name}.pdf", bbox_inches="tight")
 
 
 def index(a, x):
@@ -101,10 +96,10 @@ class Comparer:
         agg_df = self.agg_df(agg, remove_outliers)
         plot_geopandas(agg_df, "TEMP_DIFF", **kwargs)
 
-    def rmse_height(self, remove_outliers: bool = False):
+    def rmse_height(self, remove_outliers: bool = False, **kwargs):
         rmse = lambda x: np.sqrt(np.mean(x**2))
         agg_df = self.agg_df(rmse, remove_outliers)
-        plt.scatter(agg_df[names.height], agg_df["TEMP_DIFF"])
+        plt.scatter(agg_df[names.height], agg_df["TEMP_DIFF"], **kwargs)
         plt.xlabel("Height [m]")
         plt.ylabel("$\sqrt{MSE(T)}$ [°C]")
 
@@ -148,6 +143,18 @@ class Comparer:
 
 
 # %%
+fig, ax = plt.subplots(1, 1, figsize=(4, 2))
+start = pd.to_datetime("2021-01-01")
+end = pd.to_datetime("2022-12-12")
+c = Comparer(dwd_sd, era5, start, end, "18H")
+# %%
+fig, ax = plt.subplots(1, 1, figsize=(3, 6))
+# c.rmse_map(remove_outliers=True, fig_ax=(fig, ax), vmin=-2, vmax=8, legend=False)
+df = c.agg_df(agg=lambda x: np.abs(x).mean())
+# ax.set_title(f"Month = {month}")
+# saveplot("rmse_map_by_month")
+plot_geopandas(df, "TEMP_DIFF", vmin=0, vmax=3, s=4**2, fig_ax=(fig, ax))
+# %%
 
 fig, axs = plt.subplots(4, 3, figsize=(10, 20))
 for ax, month in zip(axs.flatten(), range(1, 13)):
@@ -156,7 +163,7 @@ for ax, month in zip(axs.flatten(), range(1, 13)):
     c = Comparer(dwd_sd, era5, start, end, "18H")
     c.rmse_map(remove_outliers=False, fig_ax=(fig, ax), vmin=-2, vmax=8, legend=False)
     ax.set_title(f"Month = {month}")
-saveplot("rmse_map_by_month")
+save_plot(None, "rmse_map_by_month", fig)
 plt.show()
 # %%
 fig, axs = plt.subplots(4, 3, figsize=(10, 15))
@@ -167,7 +174,7 @@ for ax, month in zip(axs.flatten(), range(1, 13)):
     c.err_hist(remove_outliers=False, ax=ax)
     ax.set_title(f"Month = {month}")
 plt.tight_layout()
-saveplot("rmse_hist_by_month")
+save_plot(None, "rmse_hist_by_month")
 plt.show()
 # %%
 fig, axs = plt.subplots(4, 3, figsize=(10, 15))
@@ -178,7 +185,7 @@ for ax, month in zip(axs.flatten(), range(1, 13)):
     c.agg_rmse_hist(remove_outliers=False, ax=ax)
     ax.set_title(f"Month = {month}")
 plt.tight_layout()
-saveplot("agg_rmse_hist_by_month")
+save_plot(None, "agg_rmse_hist_by_month")
 plt.show()
 # %%
 fig, axs = plt.subplots(4, 3, figsize=(10, 15))
@@ -189,16 +196,53 @@ for ax, month in zip(axs.flatten(), range(1, 13)):
     c.rmse_boxplot(remove_outliers=True, ax=ax)
     ax.set_title(f"Month = {month}")
 plt.tight_layout()
-saveplot("rmse_boxplot_by_month_no_outliers")
+save_plot(None, "rmse_boxplot_by_month_no_outliers")
 plt.show()
 
 # %%
 start = pd.to_datetime("2022-03-03 12:00:00")
 end = pd.to_datetime("2022-04-03 12:00:00")
 c = Comparer(dwd_sd, era5, start, end, "5H")
-c.rmse_height(False)
-saveplot("rmse_vs_height")
+c.rmse_height(False, s=2**3)
+save_plot(None, "rmse_vs_height")
 plt.show()
 c.rmse_grid_dist()
-saveplot("rmse_vs_grid_dist")
+save_plot(None, "rmse_vs_grid_dist")
 plt.show()
+
+# %%
+
+fig, axs = plt.subplots(1, 2, figsize=(9, 1.5), sharey=True)
+agg = lambda x: np.abs(x).mean()
+agg_df = c.agg_df(agg, False)
+size = 4**2
+
+mean = agg_df["TEMP_DIFF"].mean()
+
+
+axs[0].scatter(
+    agg_df["GRID_DIST"],
+    agg_df["TEMP_DIFF"],
+    s=size,
+    marker="x",
+    linewidth=0.35,
+    label="DWD Stations",
+)
+axs[0].set_ylabel("$MAE(T)$ [°C]")
+axs[0].set_xlabel("Station Distance to Grid [m]")
+
+axs[1].scatter(
+    agg_df[names.height],
+    agg_df["TEMP_DIFF"],
+    s=size,
+    marker="x",
+    linewidth=0.35,
+    label="DWD Stations",
+)
+axs[1].set_xlabel("Height [m]")
+
+for ax in axs:
+    ax.axhline(mean, color="C1", label=f"Mean = {mean:.2f}°C")
+    ax.legend(loc="upper left")
+
+save_plot(None, "mae_grid_and_height", fig)

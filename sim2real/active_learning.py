@@ -219,6 +219,8 @@ def acquisition_fn_plot(
 
 
 def station_placement_plot(num_stations):
+    t = replace(tune, num_tasks=10000, num_stations=num_stations, era5_frac=0.0)
+    e._init_testloader(t)
     fig, axs, transform = init_fig(2, 5, (10, 5.0), True)
 
     for i, tuned in enumerate([False, True]):
@@ -245,12 +247,13 @@ def station_placement_plot(num_stations):
     axs[0].text(
         -0.07,
         0.55,
-        "Pretraining Only",
+        "Sim Only",
         va="bottom",
         ha="center",
         rotation="vertical",
         rotation_mode="anchor",
         transform=axs[0].transAxes,
+        fontsize=16,
     )
 
     axs[5].text(
@@ -262,6 +265,7 @@ def station_placement_plot(num_stations):
         rotation="vertical",
         rotation_mode="anchor",
         transform=axs[5].transAxes,
+        fontsize=16,
     )
 
     fig.suptitle(
@@ -270,7 +274,7 @@ def station_placement_plot(num_stations):
     save_plot(None, f"sensor_placement_N_stat_{num_stations}", fig=fig)
 
 
-for num_stations in [20, 100, 500]:
+for num_stations in [20, 500]:
     station_placement_plot(num_stations)
 # %%
 e.plot_train_val()
