@@ -3,25 +3,19 @@ from dataclasses import asdict
 import xarray as xr
 import pandas as pd
 import matplotlib.pyplot as plt
-import torch.optim as optim
-from tqdm import tqdm
-import numpy as np
 from typing import Tuple, Union
-import cartopy.crs as ccrs
-import cartopy.feature as feature
 
-import deepsensor.torch
 from deepsensor.data.utils import (
     construct_x1x2_ds,
     construct_circ_time_ds,
 )
 from deepsensor.data.loader import TaskLoader
-from deepsensor.plot import offgrid_context
 
 from sim2real.utils import exp_dir_sim, ensure_exists
 from sim2real.plots import save_plot
+from sim2real import plots
 
-from sim2real.datasets import load_elevation, load_era5
+from sim2real.datasets import load_era5
 from sim2real.train.taskset import Taskset
 from sim2real.train.trainer import Trainer
 
@@ -95,7 +89,6 @@ class SimTrainer(Trainer):
         tl = TaskLoader(
             context,
             target,
-            # links=[(0, 0)],
             time_freq="H",
             discrete_xarray_sampling=not self.data.era5_interpolation,
         )
@@ -135,6 +128,9 @@ class SimTrainer(Trainer):
         return self.var_raw
 
     def plot_prediction(self, task=None, name=None):
+        """
+        Plot truth, predicted mean, std, errors in a row.
+        """
         if task is None:
             task = self.sample_tasks[0]
 
@@ -151,52 +147,20 @@ class SimTrainer(Trainer):
         std_ds = std_ds.assign_coords(coord_map)
         err_da = mean_ds[names.temp] - self.var_raw
 
-        proj = ccrs.TransverseMercator(central_longitude=10, approx=False)
-
-        fig, axs = plt.subplots(
-            subplot_kw={"projection": proj}, nrows=1, ncols=4, figsize=(10, 2.5)
-        )
-
         sel = {names.time: task["time"]}
+        era5_data = self.var_raw.sel(sel)
+        mean_data = mean_ds_dense[names.temp].sel(sel)
+        std_data = std_ds_dense[names.temp].sel(sel)
+        error_data = err_da.sel(sel)
 
-        era5_plot = self.var_raw.sel(sel).plot(
-            cmap="seismic", ax=axs[0], transform=ccrs.PlateCarree()
-        )
-        cbar = era5_plot.colorbar
-        vmin, vmax = cbar.vmin, cbar.vmax
-
-        axs[0].set_title("ERA5")
-        mean_ds_dense[names.temp].sel(sel).plot(
-            cmap="seismic",
-            ax=axs[1],
-            transform=ccrs.PlateCarree(),
-            vmin=vmin,
-            vmax=vmax,
-        )
-        axs[1].set_title("ConvNP mean")
-        std_ds_dense[names.temp].sel(sel).plot(
-            cmap="Greys", ax=axs[2], transform=ccrs.PlateCarree()
-        )
-        axs[2].set_title("ConvNP std dev")
-        err_da.sel(sel).plot(cmap="seismic", ax=axs[3], transform=ccrs.PlateCarree())
-        axs[3].set_title("ConvNP error")
-
-        context_axs = [ax for i, ax in enumerate(axs) if i != 1]
-        offgrid_context(
-            context_axs,
-            task,
+        fig = plots.plot_era5_prediction(
+            era5_data,
+            mean_data,
+            std_data,
+            error_data,
             self.data_processor,
-            s=3**2,
-            linewidths=0.5,
-            add_legend=False,
-            transform=ccrs.PlateCarree(),
+            task,
         )
-
-        bounds = [*self.data.bounds.lon, *self.data.bounds.lat]
-        for ax in axs:
-            ax.set_extent(bounds, crs=ccrs.PlateCarree())
-            ax.add_feature(feature.BORDERS, linewidth=0.25)
-            ax.coastlines(linewidth=0.25)
 
         if name is not None:
             ensure_exists(self.paths.out)

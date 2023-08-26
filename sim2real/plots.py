@@ -1,4 +1,5 @@
 # %%
+from deepsensor import offgrid_context
 from sim2real.utils import ensure_dir_exists
 import xarray as xr
 import numpy as np
@@ -95,3 +96,50 @@ def adjust_plot(fig=None, axs=None):
         axs = [plt.gca()]
     for ax in axs:
         ax.spines[["right", "top"]].set_visible(False)
+
+
+def plot_era5_prediction(
+    era5_data, mean_data, std_data, error_data, data_processor, task
+):
+    proj = ccrs.TransverseMercator(central_longitude=10, approx=False)
+    fig, axs = plt.subplots(
+        subplot_kw={"projection": proj}, nrows=1, ncols=4, figsize=(10, 2.5)
+    )
+
+    era5_plot = era5_data.plot(cmap="seismic", ax=axs[0], transform=ccrs.PlateCarree())
+    cbar = era5_plot.colorbar
+    vmin, vmax = cbar.vmin, cbar.vmax
+
+    axs[0].set_title("ERA5")
+
+    mean_data.plot(
+        cmap="seismic",
+        ax=axs[1],
+        transform=ccrs.PlateCarree(),
+        vmin=vmin,
+        vmax=vmax,
+    )
+    axs[1].set_title("ConvNP mean")
+    std_data.plot(cmap="Greys", ax=axs[2], transform=ccrs.PlateCarree())
+    axs[2].set_title("ConvNP std dev")
+    error_data.plot(cmap="seismic", ax=axs[3], transform=ccrs.PlateCarree())
+    axs[3].set_title("ConvNP error")
+
+    context_axs = [ax for i, ax in enumerate(axs) if i != 1]
+    offgrid_context(
+        context_axs,
+        task,
+        data_processor,
+        s=3**2,
+        linewidths=0.5,
+        add_legend=False,
+        transform=ccrs.PlateCarree(),
+    )
+
+    bounds = [*data.bounds.lon, *data.bounds.lat]
+    for ax in axs:
+        ax.set_extent(bounds, crs=ccrs.PlateCarree())
+        ax.add_feature(feature.BORDERS, linewidth=0.25)
+        ax.coastlines(linewidth=0.25)
+
+    return fig

@@ -2,23 +2,17 @@
 import copy
 from dataclasses import asdict, replace
 from itertools import product
-from typing import Dict, Tuple, Union
-import xarray as xr
+from typing import Tuple
 import pandas as pd
-import geopandas as gpd
 import cartopy.crs as ccrs
 import cartopy.feature as feature
 import matplotlib.pyplot as plt
-import matplotlib as mpl
-from functools import cache
-import torch
 
 from deepsensor.data.loader import TaskLoader
 from deepsensor.data.processor import DataProcessor
 import deepsensor.torch
 from deepsensor.data.utils import construct_x1x2_ds, construct_circ_time_ds
 from deepsensor.plot import offgrid_context
-from deepsensor.model.model import create_empty_spatiotemporal_xarray
 
 
 from sim2real.config import (
@@ -55,7 +49,6 @@ from sim2real.utils import (
 from sim2real.plots import save_plot
 from sim2real.datasets import (
     DWDStationData,
-    load_elevation,
     load_station_splits,
     load_time_splits,
 )
