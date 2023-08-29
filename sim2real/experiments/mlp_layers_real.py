@@ -7,7 +7,7 @@ from sim2real.config import (
     Paths,
     TuneSpec,
     TunerType,
-    tune_opt as opt,
+    pretrain_opt as opt,
     out,
     model,
     data,
@@ -24,7 +24,7 @@ mlp_capacity = 128
 nums_mlp_layers = [5]
 
 # No pretraining.
-exp_opt = replace(opt, start_from=None)
+exp_opt = replace(opt, start_from=None, num_epochs=300)
 
 # Maximum number of real data.
 exp_tune = replace(tune, num_stations=500, num_tasks=10000, no_pretraining=True)
