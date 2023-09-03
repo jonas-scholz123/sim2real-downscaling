@@ -21,7 +21,7 @@ from sim2real.train.tune import Sim2RealTrainer
 from dataclasses import replace
 
 mlp_capacity = 128
-nums_mlp_layers = [5]
+nums_mlp_layers = [3]
 
 # No pretraining.
 exp_opt = replace(opt, start_from="best", num_epochs=300)
