@@ -9,7 +9,7 @@ import pandas as pd
 
 def process_srtm():
     print("Loading raw SRTM dataset...")
-    elevation = xr.open_rasterio(paths.raw_srtm)
+    elevation = xr.open_dataset(paths.raw_srtm, engine="rasterio")
     elevation = elevation.rename(
         {
             "x": names.lon,
@@ -17,7 +17,7 @@ def process_srtm():
         }
     )
     elevation = elevation.sel(band=1).drop("band")
-    elevation.name = names.height
+    elevation = elevation.rename({"band_data": names.height})
     ensure_dir_exists(paths.srtm)
     elevation.to_netcdf(paths.srtm)
 

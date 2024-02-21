@@ -1,0 +1,54 @@
+station_id, name, longitude, latitude, altitude, source
+2006, BROCKEN                                 , 10.620000, 51.800000, 1142.000000, ECA&D and DWD
+2760, TRIER-PETRISBERG                        , 6.659167, 49.749167, 265.000000, ECA&D and DWD
+2761, FRANKFURT/M-FLUGHAFEN                   , 8.583056, 50.033056, 112.000000, ECA&D and DWD
+356, AACHEN                                  , 6.095000, 50.783889, 202.000000, ECA&D and DWD
+3987, FELDBERG/SCHWARZWALD                    , 8.004444, 47.875556, 1490.000000, ECA&D and DWD
+3991, GIESSEN/WETTENBERG                      , 8.650556, 50.600833, 203.000000, ECA&D and DWD
+3994, ARKONA                                  , 13.436667, 54.681667, 42.000000, ECA&D and DWD
+4002, OBERSTDORF                              , 10.276667, 47.398889, 806.000000, ECA&D and DWD
+4004, REGENSBURG                              , 12.103056, 49.043333, 365.000000, ECA&D and DWD
+4007, WASSERKUPPE                             , 9.943889, 50.497778, 921.000000, ECA&D and DWD
+4009, WENDELSTEIN                             , 12.013056, 47.704167, 1832.000000, ECA&D and DWD
+4014, COTTBUS                                 , 14.318333, 51.777500, 69.000000, ECA&D and DWD
+4015, CUXHAVEN                                , 8.706667, 53.873056, 5.000000, ECA&D and DWD
+4074, ESSEN-BREDENEY                          , 6.968333, 51.405556, 150.000000, ECA&D and DWD
+4079, KR.ROTTAL-INN FALKENBERG                , 12.725556, 48.484167, 472.000000, ECA&D and DWD
+4083, FICHTELBERG/OBERFRANKEN-HUTTSTADL       , 11.839167, 49.981667, 657.000000, ECA&D and DWD
+4187, HAMELN                                  , 9.389167, 52.085000, 68.000000, ECA&D and DWD
+42, BREMEN                                  , 8.799167, 53.046389, 4.000000, ECA&D and DWD
+4218, HERTEN                                  , 7.155556, 51.590278, 60.000000, ECA&D and DWD
+4284, BADEN-BADEN-GEROLDSAU                   , 8.246667, 48.727778, 240.000000, ECA&D and DWD
+4297, KOBLENZ-HORCHHEIM                       , 7.600000, 50.338056, 85.000000, ECA&D and DWD
+4472, REIMLINGEN                              , 10.507778, 48.826389, 435.000000, ECA&D and DWD
+4499, OSNABRUCK                               , 8.054167, 52.256944, 95.000000, ECA&D and DWD
+4572, ROTHENBURG OB DER TAUBER                , 10.174167, 49.385556, 415.000000, ECA&D and DWD
+4617, SCHMUCKE                                , 10.770833, 50.655556, 937.000000, ECA&D and DWD
+4637, SEEHAUSEN                               , 11.730556, 52.892778, 21.000000, ECA&D and DWD
+4644, SIGMARINGEN-LAIZ                        , 9.195278, 48.072778, 580.000000, ECA&D and DWD
+4652, SOLTAU                                  , 9.796667, 52.961667, 76.000000, ECA&D and DWD
+4669, STUTTGART (NECKARTAL)                   , 9.217778, 48.790556, 224.000000, ECA&D and DWD
+4676, TETEROW                                 , 12.558056, 53.762500, 38.000000, ECA&D and DWD
+468, HELGOLAND                               , 7.893056, 54.176389, 4.000000, ECA&D and DWD
+469, LIST/SYLT                               , 8.412500, 55.012500, 26.000000, ECA&D and DWD
+47, HAMBURG FUHLSBUETTEL                    , 9.990000, 53.635000, 11.000000, ECA&D and DWD
+470, SCHLESWIG                               , 9.549167, 54.528889, 43.000000, ECA&D and DWD
+4710, UNTERLUSS                               , 10.290833, 52.851389, 95.000000, ECA&D and DWD
+472, ROSTOCK-WARNEMUNDE                      , 12.081944, 54.181667, 4.000000, ECA&D and DWD
+475, NEURUPPIN                               , 12.808333, 52.905278, 38.000000, ECA&D and DWD
+477, MAGDEBURG                               , 11.584167, 52.103056, 76.000000, ECA&D and DWD
+4776, WITTENBERG                              , 12.646389, 51.890278, 105.000000, ECA&D and DWD
+48, HOHENPEISSENBERG                        , 11.011667, 47.801667, 977.000000, ECA&D and DWD
+480, KASSEL                                  , 9.443333, 51.297778, 231.000000, ECA&D and DWD
+483, DRESDEN-KLOTZSCHE                       , 13.755833, 51.129167, 227.000000, ECA&D and DWD
+4838, DORPEN                                  , 7.319167, 52.955278, 8.000000, ECA&D and DWD
+488, FICHTELBERG                             , 12.955278, 50.429167, 1213.000000, ECA&D and DWD
+4882, BRAUNSCHWEIG                            , 10.448333, 52.290278, 81.000000, ECA&D and DWD
+49, JENA STERNWARTE                         , 11.584167, 50.926667, 155.000000, ECA&D and DWD
+4954, CHEMNITZ                                , 12.873333, 50.792500, 418.000000, ECA&D and DWD
+51, KARLSRUHE                               , 8.365000, 49.039167, 112.000000, ECA&D and DWD
+52, MUENCHEN                                , 11.544167, 48.164167, 515.000000, ECA&D and DWD
+54, POTSDAM                                 , 13.063889, 52.383333, 81.000000, ECA&D and DWD
+55, SCHWERIN                                , 11.388333, 53.644167, 59.000000, ECA&D and DWD
+58, ZUGSPITZE                               , 10.986667, 47.421944, 2964.000000, ECA&D and DWD
+812, KAHLER ASTEN (WST)                      , 8.490000, 51.181667, 839.000000, ECA&D and DWD

@@ -189,7 +189,7 @@ paths = Paths(
     out=f"{root}/_outputs",
     test_results=f"{root}/_outputs/test_results.csv",
     active_learning_dir=f"{root}/_outputs/active_learning/",
-    shapefile=f"{root}/data/shapefiles/DEU_adm0.shp",
+    shapefile=f"{root}/helper_files/shapefiles/DEU_adm0.shp",
 )
 
 data = DataSpec(

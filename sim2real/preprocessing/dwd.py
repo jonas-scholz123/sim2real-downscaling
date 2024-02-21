@@ -13,10 +13,10 @@ from sim2real.plots import init_fig
 from sim2real.utils import ensure_dir_exists
 from sim2real.datasets import DWDStationData, load_station_splits
 
+VALUE_STATIONS_FPATH = f"{paths.root}/helper_files/value_stations.txt"
+
 
 fnames = [
-    "BESCHREIBUNG_obsgermany_climate_hourly_tu_recent_de.pdf",
-    "DESCRIPTION_obsgermany_climate_hourly_tu_recent_en.pdf",
     "TU_Stundenwerte_Beschreibung_Stationen.txt",
     "stundenwerte_TU_00044_akt.zip",
     "stundenwerte_TU_00073_akt.zip",
@@ -55,7 +55,6 @@ fnames = [
     "stundenwerte_TU_00390_akt.zip",
     "stundenwerte_TU_00400_akt.zip",
     "stundenwerte_TU_00403_akt.zip",
-    "stundenwerte_TU_00410_akt.zip",
     "stundenwerte_TU_00420_akt.zip",
     "stundenwerte_TU_00427_akt.zip",
     "stundenwerte_TU_00430_akt.zip",
@@ -84,6 +83,7 @@ fnames = [
     "stundenwerte_TU_00850_akt.zip",
     "stundenwerte_TU_00853_akt.zip",
     "stundenwerte_TU_00856_akt.zip",
+    "stundenwerte_TU_00860_akt.zip",
     "stundenwerte_TU_00867_akt.zip",
     "stundenwerte_TU_00880_akt.zip",
     "stundenwerte_TU_00891_akt.zip",
@@ -137,6 +137,7 @@ fnames = [
     "stundenwerte_TU_01526_akt.zip",
     "stundenwerte_TU_01544_akt.zip",
     "stundenwerte_TU_01550_akt.zip",
+    "stundenwerte_TU_01572_akt.zip",
     "stundenwerte_TU_01580_akt.zip",
     "stundenwerte_TU_01584_akt.zip",
     "stundenwerte_TU_01587_akt.zip",
@@ -268,6 +269,7 @@ fnames = [
     "stundenwerte_TU_03289_akt.zip",
     "stundenwerte_TU_03307_akt.zip",
     "stundenwerte_TU_03319_akt.zip",
+    "stundenwerte_TU_03321_akt.zip",
     "stundenwerte_TU_03340_akt.zip",
     "stundenwerte_TU_03348_akt.zip",
     "stundenwerte_TU_03362_akt.zip",
@@ -361,6 +363,7 @@ fnames = [
     "stundenwerte_TU_04706_akt.zip",
     "stundenwerte_TU_04709_akt.zip",
     "stundenwerte_TU_04745_akt.zip",
+    "stundenwerte_TU_04748_akt.zip",
     "stundenwerte_TU_04763_akt.zip",
     "stundenwerte_TU_04813_akt.zip",
     "stundenwerte_TU_04841_akt.zip",
@@ -461,7 +464,6 @@ fnames = [
     "stundenwerte_TU_06275_akt.zip",
     "stundenwerte_TU_06305_akt.zip",
     "stundenwerte_TU_06310_akt.zip",
-    "stundenwerte_TU_06312_akt.zip",
     "stundenwerte_TU_06314_akt.zip",
     "stundenwerte_TU_06336_akt.zip",
     "stundenwerte_TU_06337_akt.zip",
@@ -605,6 +607,7 @@ def process_dwd():
     dfs = []
     meta_dfs = []
     root = paths.raw_dwd
+    print("Processing DWD data")
     for subdir in tqdm(os.listdir(root)):
         dir_path = f"{root}/{subdir}"
         if not os.path.isdir(dir_path):
@@ -639,7 +642,7 @@ def process_dwd():
 
 
 def process_value_stations():
-    df = pd.read_csv(f"{paths.root}/data/raw/dwd/value_stations.txt")
+    df = pd.read_csv(VALUE_STATIONS_FPATH)
     df.columns = [
         names.station_id,
         names.station_name,
@@ -746,7 +749,7 @@ def split(df, dts, station_ids) -> Tuple[pd.DataFrame]:
 def get_test_station_ids():
     dwd = DWDStationData(paths)
 
-    df = pd.read_csv(f"{paths.root}/data/raw/dwd/value_stations.txt")
+    df = pd.read_csv(VALUE_STATIONS_FPATH)
     df.columns = [
         names.station_id,
         names.station_name,
@@ -894,9 +897,9 @@ def plot_train_val(train, val):
 
 
 if __name__ == "__main__":
+    download_dwd()
+    process_dwd()
+    process_value_stations()
     datetime_split_plot()
-    # download_dwd()
-    # process_dwd()
-    # process_value_stations()
-    # save_station_splits("random")
-    # ss = load_station_splits()
+    save_station_splits("random")
+    ss = load_station_splits()
