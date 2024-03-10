@@ -62,8 +62,8 @@ class ModelSpec:
     decoder_scale: float
     encoder_scales_learnable: bool
     decoder_scale_learnable: bool
-    dim_aux_t: int
-    aux_t_mlp_layers: tuple
+    use_aux_mlp: bool
+    aux_t_mlp_layers: Tuple[int]
 
 
 @dataclass
@@ -142,13 +142,28 @@ class TuneSpec:
 
 # Inferred from ERA5 data and pasted here.
 norm_params = {
-    "coords": {
-        "time": {"name": "TIME"},
-        "x1": {"name": "LAT", "map": (47.2, 54.95)},
-        "x2": {"name": "LON", "map": (5.8, 15.05)},
+    "HEIGHT": {"method": "min_max", "params": {"max": 2798.2248999999997, "min": 0.0}},
+    "T2M": {
+        "method": "mean_std",
+        "params": {"mean": 9.502816664564678, "std": 7.88809926879396},
     },
-    "T2M": {"mean": 9.695045471191406, "std": 7.660834312438965},
-    "HEIGHT": {"mean": 263.4660561588103, "std": 345.67930603408615},
+    "TPI_0.025": {
+        "method": "min_max",
+        "params": {"max": 1104.3115754206444, "min": -926.2898691203725},
+    },
+    "TPI_0.05": {
+        "method": "min_max",
+        "params": {"max": 1179.4161623897744, "min": -1045.8118006587536},
+    },
+    "TPI_0.1": {
+        "method": "min_max",
+        "params": {"max": 1414.6676017547015, "min": -1149.0056097925672},
+    },
+    "coords": {
+        "time": {"name": "time"},
+        "x1": {"map": (47.042083333333366, 55.958749999999995), "name": "LAT"},
+        "x2": {"map": (5.04125, 15.957916666666623), "name": "LON"},
+    },
 }
 
 
@@ -159,7 +174,7 @@ names = Names(
     height="HEIGHT",
     station_name="STATION_NAME",
     station_id="STATION_ID",
-    time="TIME",
+    time="time",
     train="TRAIN",
     val="VAL",
     test="TEST",
@@ -222,7 +237,7 @@ pretrain_opt = OptimSpec(
     batches_per_epoch=200,
     num_epochs=300,
     lr=1e-4,
-    start_from="best",  # None, "best", "latest"
+    start_from="latest",  # None, "best", "latest"
     scheduler_patience=8,
     early_stop_patience=20,
     scheduler_factor=1 / 3,
@@ -233,7 +248,7 @@ tune_opt = OptimSpec(
     device="cuda",
     batch_size=16,
     batch_size_val=512,
-    batches_per_epoch=25,
+    batches_per_epoch=100,
     num_epochs=100,
     lr=3e-5,
     start_from=None,  # None, "best", "latest"
@@ -244,21 +259,22 @@ tune_opt = OptimSpec(
 
 opt = tune_opt
 
-ppu = 200  # Found from dwd.compute_ppu()
+# ppu = 200  # Found from dwd.compute_ppu()
+ppu = 150
 model = ModelSpec(
     unet_channels=(96,) * 6,
-    aux_t_mlp_layers=(128, 128, 128),
-    dim_aux_t=None,  # No aux data passed at MLP. Set to None for no MLP at all.
+    aux_t_mlp_layers=(96, 96, 96),
     dim_yt=1,
     dim_yc=(1, 7),
     ppu=ppu,
-    film=True,
-    freeze_film=True,
+    film=True,  # Deprecated, doesn't do anything.
+    freeze_film=True,  # Deprecated, doesn't do anything.
     likelihood="het",
     encoder_scales=[1 / ppu, 1 / ppu],
     decoder_scale=1 / ppu,
     encoder_scales_learnable=False,
     decoder_scale_learnable=False,
+    use_aux_mlp=True,
 )
 
 out = OutputSpec(
@@ -278,7 +294,7 @@ out = OutputSpec(
 tune = TuneSpec(
     tuner=TunerType.naive,
     num_stations=500,
-    num_tasks=400,
+    num_tasks=10000,
     val_frac_stations=0.2,
     val_frac_times=0.2,
     split=True,

@@ -402,9 +402,11 @@ class Evaluator(Sim2RealTrainer):
         else:
             task = copy.deepcopy(task)
 
-        mean_ds, std_ds = self.model.predict(
+        prediction = self.model.predict(
             task, X_t=self.raw_aux, resolution_factor=resolution_factor
         )
+
+        mean_ds, std_ds = prediction["mean"], prediction["std"]
 
         return mean_ds, std_ds
 
@@ -1004,7 +1006,7 @@ if __name__ == "__main__":
     axs[0, 0].set_title("")
     axs[0, 1].set_title("")
 
-    # save_plot(None, "alps", fig)
+    save_plot(None, "alps", fig)
     # %%
 
     # %%
@@ -1067,8 +1069,8 @@ if __name__ == "__main__":
             ax.set_xticks([])
             ax.set_yticks([])
 
-        nums_tasks = [400, 10000]
-        nums_stations = [20, 100, 500]
+        nums_tasks = [10000]
+        nums_stations = [500]
 
         for i, num_tasks in enumerate(nums_tasks, 0):
             for j, num_stations in enumerate(nums_stations, 2):

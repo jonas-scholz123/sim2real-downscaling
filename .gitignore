@@ -7,6 +7,8 @@ deepsensor/
 _outputs/
 wandb/
 *nfs000*
+sim2real/experiments/figures
+sim2real/experiments/models
 
 suggestions.txt
 

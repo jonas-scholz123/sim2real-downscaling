@@ -1,7 +1,11 @@
 from pprint import pprint
 import torch
 from deepsensor.data.loader import TaskLoader
-from deepsensor.model.defaults import gen_encoder_scales, gen_ppu, gen_decoder_scale
+from deepsensor.model.defaults import (
+    gen_encoder_scales,
+    gen_decoder_scale,
+    compute_greatest_data_density,
+)
 import neuralprocesses.torch as nps
 from plum import convert
 
@@ -546,7 +550,7 @@ def from_taskloader(
         dim_yt = sum(task_loader.target_dims)  # Must be an int
         kwargs["dim_yt"] = dim_yt
     if "points_per_unit" not in kwargs:
-        ppu = gen_ppu(task_loader)
+        ppu = compute_greatest_data_density(task_loader)
         kwargs["points_per_unit"] = ppu
     if "encoder_scales" not in kwargs:
         encoder_scales = gen_encoder_scales(kwargs["points_per_unit"], task_loader)

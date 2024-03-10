@@ -20,7 +20,7 @@ def get_model_dir(m: ModelSpec):
     if m.film:
         channel_str += "film"
 
-    if m.dim_aux_t is not None:
+    if m.use_aux_mlp:
         mlp_str = "_mlp_" + str(m.aux_t_mlp_layers)[1:-1].replace(", ", "_")
     else:
         mlp_str = ""
@@ -76,14 +76,18 @@ def get_default_data_processor():
     x1_min, x1_max = data.bounds.lat
     x2_min, x2_max = data.bounds.lon
 
-    return DataProcessor(
+    data_processor = DataProcessor(
         time_name=names.time,
         x1_name=names.lat,
         x2_name=names.lon,
         x1_map=(x1_min, x1_max),
         x2_map=(x2_min, x2_max),
-        norm_params=data.norm_params,
     )
+
+    DataProcessor.add_to_config
+
+    data_processor.config = data.norm_params
+    return data_processor
 
 
 def load_weights(model, path, loss_only=False):

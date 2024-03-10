@@ -49,6 +49,7 @@ from sim2real.utils import (
 from sim2real.plots import save_plot
 from sim2real.datasets import (
     DWDStationData,
+    load_elevation,
     load_station_splits,
     load_time_splits,
 )
@@ -153,7 +154,12 @@ class Sim2RealTrainer(Trainer):
         context_points.append(aux_context_points)
 
         # Normalise.
-        c_df, t_df, aux = self.data_processor([c_df, t_df, aux])
+        c_df, t_df = self.data_processor([c_df, t_df])
+
+        hi_res_aux_raw = load_elevation()
+
+        aux, hi_res_aux = self.data_processor([aux, hi_res_aux_raw], method="min_max")
+        aux_at_targets = hi_res_aux if self.mspec.use_aux_mlp else None
 
         # Add spatio-temporal data.
         x1x2_ds = construct_x1x2_ds(aux)
@@ -173,7 +179,14 @@ class Sim2RealTrainer(Trainer):
         aux["cos_H"] = tod_ds["cos_H"]
         aux["sin_H"] = tod_ds["sin_H"]
 
-        tl = TaskLoader([c_df, aux], t_df, links=[(0, 0)], time_freq="H")
+        tl = TaskLoader(
+            context=[c_df, aux],
+            target=t_df,
+            time_freq="H",
+            discrete_xarray_sampling=not self.data.era5_interpolation,
+            aux_at_targets=aux_at_targets,
+            links=[(0, 0)],
+        )
 
         if set_task_loader:
             # Need the task loader for inferring model etc.
@@ -369,16 +382,20 @@ class Sim2RealTrainer(Trainer):
             task = copy.deepcopy(task)
 
         # Get temperature at all stations on the task date.
-        truth = self.get_truth(task["time"])
+        truth = self.get_truth(task["time"])[names.temp]
 
-        mean_ds, std_ds = self.model.predict(task, X_t=truth)
+        prediction = self.model.predict(task, X_t=truth)[names.temp]
+        mean_ds, std_ds = prediction["mean"], prediction["std"]
         # Fix rounding errors along dimensions.
-        err_da = mean_ds[names.temp] - truth[names.temp]
+        err_da = mean_ds - truth
         err_da = err_da.dropna()
 
         high_res_df = self._add_aux(res_factor=res_factor)[0].to_dataframe()
         # Higher resolution prediction everywhere.
-        mean_ds, std_ds = self.model.predict(task, X_t=high_res_df, resolution_factor=1)
+        prediction = self.model.predict(task, X_t=high_res_df, resolution_factor=1)[
+            names.temp
+        ]
+        mean_ds, std_ds = prediction["mean"], prediction["std"]
         mean_ds = mean_ds.to_xarray().astype(float)
         std_ds = std_ds.to_xarray().astype(float)
 
@@ -394,7 +411,7 @@ class Sim2RealTrainer(Trainer):
         )
 
         transform = ccrs.PlateCarree()
-        vmin, vmax = 0.9 * truth[names.temp].min(), 1.1 * truth[names.temp].max()
+        vmin, vmax = 0.9 * truth.min(), 1.1 * truth.max()
 
         s = 3**2
 
@@ -402,7 +419,7 @@ class Sim2RealTrainer(Trainer):
         im = axs[0].scatter(
             *lons_and_lats(truth),
             s=s,
-            c=truth[names.temp],
+            c=truth,
             transform=transform,
             vmin=vmin,
             vmax=vmax,
@@ -410,7 +427,7 @@ class Sim2RealTrainer(Trainer):
         )
         fig.colorbar(im, ax=axs[0])
 
-        im = mean_ds[names.temp].plot(
+        im = mean_ds.plot(
             cmap=cmap,
             ax=axs[1],
             transform=transform,
@@ -420,7 +437,7 @@ class Sim2RealTrainer(Trainer):
         )
         axs[1].set_title("Pred. Mean [°C]")
 
-        im = std_ds[names.temp].plot(
+        im = std_ds.plot(
             cmap="viridis_r",
             ax=axs[2],
             transform=transform,

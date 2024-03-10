@@ -15,7 +15,7 @@ from sim2real.utils import exp_dir_sim, ensure_exists
 from sim2real.plots import save_plot
 from sim2real import plots
 
-from sim2real.datasets import load_era5
+from sim2real.datasets import load_elevation, load_era5
 from sim2real.train.taskset import Taskset
 from sim2real.train.trainer import Trainer
 
@@ -57,10 +57,15 @@ class SimTrainer(Trainer):
         self.aux_raw, context = self._add_aux()
         context_points.append(context)
 
+        hi_res_aux_raw = load_elevation()
+
         self.raw = [self.var_raw, self.aux_raw]
 
         self.data_processor = self._init_data_processor()
-        var, aux = self.data_processor(self.raw)
+        var = self.data_processor([self.var_raw])[0]
+        aux, hi_res_aux = self.data_processor(
+            [self.aux_raw, hi_res_aux_raw], method="min_max"
+        )
 
         # Add spatio-temporal data.
         x1x2_ds = construct_x1x2_ds(aux)
@@ -79,18 +84,21 @@ class SimTrainer(Trainer):
         aux["cos_H"] = tod_ds["cos_H"]
         aux["sin_H"] = tod_ds["sin_H"]
 
-        return [var, aux], [var], context_points, target_points
+        return [var, aux], [var], context_points, target_points, hi_res_aux
 
     def _get_exp_dir(self, mspec: ModelSpec):
         return exp_dir_sim(mspec)
 
     def _init_tasksets(self) -> Tuple[Taskset, Taskset, Taskset]:
-        context, target, c_points, t_points = self._get_data()
+        context, target, c_points, t_points, hi_res_aux = self._get_data()
+
+        aux_at_targets = hi_res_aux if self.mspec.use_aux_mlp else None
         tl = TaskLoader(
-            context,
-            target,
+            context=context,
+            target=target,
             time_freq="H",
             discrete_xarray_sampling=not self.data.era5_interpolation,
+            aux_at_targets=aux_at_targets,
         )
         self.task_loader = tl
 
@@ -134,8 +142,11 @@ class SimTrainer(Trainer):
         if task is None:
             task = self.sample_tasks[0]
 
-        mean_ds, std_ds = self.model.predict(task, X_t=self._plot_X_t())
-        mean_ds_dense, std_ds_dense = self.model.predict(task, X_t=self.aux_raw)
+        prediction = self.model.predict(task, X_t=self._plot_X_t())[names.temp]
+        mean_ds, std_ds = prediction["mean"], prediction["std"]
+
+        prediction = self.model.predict(task, X_t=self.aux_raw)[names.temp]
+        mean_ds_dense, std_ds_dense = prediction["mean"], prediction["std"]
 
         coord_map = {
             names.lat: self.var_raw[names.lat],
@@ -145,12 +156,12 @@ class SimTrainer(Trainer):
         # Fix rounding errors along dimensions.
         mean_ds = mean_ds.assign_coords(coord_map)
         std_ds = std_ds.assign_coords(coord_map)
-        err_da = mean_ds[names.temp] - self.var_raw
+        err_da = mean_ds - self.var_raw
 
         sel = {names.time: task["time"]}
         era5_data = self.var_raw.sel(sel)
-        mean_data = mean_ds_dense[names.temp].sel(sel)
-        std_data = std_ds_dense[names.temp].sel(sel)
+        mean_data = mean_ds_dense.sel(sel)
+        std_data = std_ds_dense.sel(sel)
         error_data = err_da.sel(sel)
 
         fig = plots.plot_era5_prediction(

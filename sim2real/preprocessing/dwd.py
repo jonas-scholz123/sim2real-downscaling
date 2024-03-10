@@ -902,4 +902,5 @@ if __name__ == "__main__":
     process_value_stations()
     datetime_split_plot()
     save_station_splits("random")
+    save_datetime_splits()
     ss = load_station_splits()

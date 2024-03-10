@@ -262,7 +262,7 @@ class Trainer(ABC):
         model_kwargs = dict(
             dim_yc=self.mspec.dim_yc,
             dim_yt=self.mspec.dim_yt,
-            points_per_unit=self.mspec.ppu,
+            internal_density=self.mspec.ppu,
             likelihood=self.mspec.likelihood,
             unet_channels=self.mspec.unet_channels,
             encoder_scales=self.mspec.encoder_scales,
@@ -270,14 +270,10 @@ class Trainer(ABC):
             encoder_scales_learnable=self.mspec.encoder_scales_learnable,
             decoder_scale_learnable=self.mspec.decoder_scale_learnable,
             aux_t_mlp_layers=self.mspec.aux_t_mlp_layers,
-            dim_aux_t=self.mspec.dim_aux_t,
-            film=self.mspec.film,
-            freeze_film=self.mspec.freeze_film,
         )
 
-        model = convcnp.from_taskloader(self.task_loader, **model_kwargs)
-        print(model)
-        model = ConvNP(self.data_processor, self.task_loader, model)
+        model = ConvNP(self.data_processor, self.task_loader, **model_kwargs)
+        print(model.model)
         try:
             self.best_val_loss = load_weights(None, self.best_path, loss_only=True)[1]
         except FileNotFoundError:
